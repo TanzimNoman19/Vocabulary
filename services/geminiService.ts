@@ -5,15 +5,24 @@
 
 import {GoogleGenAI, Tool, FunctionDeclaration, Type} from '@google/genai';
 
-// This check is for development-time feedback.
-if (!process.env.API_KEY) {
-  console.error(
-    'API_KEY environment variable is not set. The application will not be able to connect to the Gemini API.',
-  );
-}
+// Initialize the client lazily or safely to prevent top-level crashes
+let ai: GoogleGenAI;
+const getAiClient = () => {
+  if (!ai) {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      console.error('API_KEY is missing.');
+      // Return a dummy client or throw to be handled by caller, 
+      // but strictly following instruction to use process.env.API_KEY.
+      // We instantiate with a placeholder if empty to allow app to load (calls will fail gracefully later).
+      ai = new GoogleGenAI({apiKey: 'MISSING_KEY'}); 
+    } else {
+      ai = new GoogleGenAI({apiKey: apiKey});
+    }
+  }
+  return ai;
+};
 
-// The "!" asserts API_KEY is non-null after the check.
-const ai = new GoogleGenAI({apiKey: process.env.API_KEY!});
 const artModelName = 'gemini-2.5-flash';
 const textModelName = 'gemini-2.5-flash-lite';
 const chatModelName = 'gemini-2.5-flash';
@@ -100,7 +109,7 @@ export const vocabTools: Tool[] = [{
 }];
 
 export const createChatSession = () => {
-  return ai.chats.create({
+  return getAiClient().chats.create({
     model: chatModelName,
     config: {
       tools: vocabTools,
@@ -162,7 +171,7 @@ export async function* streamDefinition(
   [A short, helpful memory aid]`;
 
   try {
-    const response = await ai.models.generateContentStream({
+    const response = await getAiClient().models.generateContentStream({
       model: textModelName,
       contents: prompt,
       config: {
@@ -198,7 +207,7 @@ export async function getRandomWord(): Promise<string> {
   const prompt = `Generate a single, interesting, sophisticated English vocabulary word (SAT/GRE level). Examples: "Ephemeral", "Obfuscate", "Serendipity", "Petrichor". Respond with only the word itself, no punctuation.`;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAiClient().models.generateContent({
       model: textModelName,
       contents: prompt,
       config: {
@@ -227,7 +236,7 @@ export async function generateUsageExample(word: string): Promise<string> {
   Make it different from standard dictionary examples. Do not define the word, just use it.`;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAiClient().models.generateContent({
       model: textModelName,
       contents: prompt,
       config: { thinkingConfig: { thinkingBudget: 0 } },
@@ -279,7 +288,7 @@ Return ONLY the raw JSON object, no additional text. The response must start wit
         config.thinkingConfig = { thinkingBudget: 0 };
       }
 
-      const response = await ai.models.generateContent({
+      const response = await getAiClient().models.generateContent({
         model: artModelName,
         contents: prompt,
         config: config,
