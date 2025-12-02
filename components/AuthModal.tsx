@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -131,11 +132,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
           // --- OTP VERIFICATION FORM ---
           <form onSubmit={handleVerify} className="auth-form">
             <p style={{textAlign: 'center', fontSize: '0.9rem'}}>
-                Please enter the 6-digit code sent to <strong>{email}</strong>
+                Please enter the verification code sent to <strong>{email}</strong>
             </p>
             <input
               type="text"
-              placeholder="123456"
+              placeholder="Code"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               required
