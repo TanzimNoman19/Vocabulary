@@ -247,6 +247,86 @@ export async function generateUsageExample(word: string): Promise<string> {
   }
 }
 
+// --- Story Mode Services ---
+
+export const STORY_PROMPTS = [
+  "A cyberpunk detective solving a crime in a city where memories can be traded.",
+  "An ancient library where the books whisper secrets to those who listen.",
+  "A serene journey through a forest where the seasons change with every step.",
+  "A high-stakes negotiation between two galactic empires on the brink of war.",
+  "A solitary lighthouse keeper who discovers a message in a bottle from the future.",
+  "A Victorian-era inventor trying to create a machine that captures dreams.",
+  "A group of explorers discovering a hidden civilization beneath the ice of Antarctica.",
+  "A coffee shop in Tokyo that only appears when it rains.",
+  "A musician who finds a melody that can manipulate time."
+];
+
+/**
+ * Generates a segment of a story.
+ * @param userContext User instructions (style, keywords, etc.)
+ * @param previousText The story so far (to maintain continuity)
+ */
+export async function generateStorySegment(userContext: string, previousText: string = ''): Promise<string> {
+  if (!process.env.API_KEY) throw new Error('API_KEY missing');
+
+  let prompt = '';
+  
+  if (!previousText) {
+    // START OF STORY
+    prompt = `Write the opening paragraph (approx 100-150 words) of a short story based on this prompt: "${userContext}".
+    
+    Guidelines:
+    - Use sophisticated, evocative vocabulary (GRE/SAT level).
+    - Style: Immersive and engaging.
+    - Do not output any meta-text like "Here is the story". Just the story text.`;
+  } else {
+    // CONTINUATION
+    prompt = `Continue the following story. 
+    
+    PREVIOUS CONTEXT: "${previousText.slice(-1000)}"
+    
+    USER INSTRUCTIONS/STYLE: "${userContext}"
+    
+    Guidelines:
+    - Write the next segment (approx 100-150 words).
+    - Maintain the tone and plot continuity.
+    - Use sophisticated vocabulary.
+    - Do not repeat the previous text.`;
+  }
+
+  try {
+    const response = await getAiClient().models.generateContent({
+      model: textModelName,
+      contents: prompt,
+      config: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+    return response.text.trim();
+  } catch (error) {
+    throw new Error("Failed to generate story segment.");
+  }
+}
+
+/**
+ * Fetches a very short definition for tooltip.
+ */
+export async function getShortDefinition(word: string): Promise<string> {
+  if (!process.env.API_KEY) return "Definition unavailable";
+
+  const prompt = `Define "${word}" in 10 words or less. Simple and direct.`;
+
+  try {
+    const response = await getAiClient().models.generateContent({
+      model: textModelName, // Use Flash Lite for speed
+      contents: prompt,
+      config: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+    return response.text.trim();
+  } catch (error) {
+    return "Could not define.";
+  }
+}
+
+
 /**
  * Generates ASCII art and optionally text for a given topic.
  * @param topic The topic to generate art for.

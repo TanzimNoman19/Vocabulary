@@ -15,7 +15,7 @@ interface SearchBarProps {
   canBack: boolean;
   canForward: boolean;
   isAtHome: boolean;
-  suggestionWords: string[]; // List of words for autocomplete
+  savedWords: string[]; // Pass saved words to prioritize them in search
   onOpenAuth: () => void;
   userDisplayName?: string | null;
 }
@@ -31,7 +31,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   canBack,
   canForward,
   isAtHome,
-  suggestionWords,
+  savedWords,
   onOpenAuth,
   userDisplayName
 }) => {
@@ -39,23 +39,56 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const debounceTimer = useRef<number | null>(null);
 
-  // Filter suggestions when query changes
+  // Fetch suggestions from Datamuse API + Local Saved Words
   useEffect(() => {
-    if (query.trim().length > 0) {
-      const lowerQuery = query.toLowerCase();
-      // Filter words that start with the query, limit to 8 results
-      const matches = suggestionWords
-        .filter(word => word.toLowerCase().startsWith(lowerQuery))
-        .slice(0, 8);
-      
-      setSuggestions(matches);
-      setShowSuggestions(matches.length > 0);
-    } else {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    if (query.trim().length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
+      return;
     }
-  }, [query, suggestionWords]);
+
+    debounceTimer.current = window.setTimeout(async () => {
+        const lowerQuery = query.toLowerCase();
+        
+        // 1. Get local matches first (High Priority)
+        const localMatches = savedWords
+            .filter(word => word.toLowerCase().startsWith(lowerQuery))
+            .slice(0, 5); // Limit local matches
+
+        // 2. Fetch from Datamuse API
+        let apiMatches: string[] = [];
+        try {
+            const response = await fetch(`https://api.datamuse.com/sug?s=${encodeURIComponent(query)}`);
+            if (response.ok) {
+                const data = await response.json();
+                // Data format is [{word: 'apple', score: 123}, ...]
+                apiMatches = data.map((item: any) => item.word);
+            }
+        } catch (err) {
+            console.warn("Dictionary API failed, falling back to local only", err);
+        }
+
+        // 3. Merge and Deduplicate (Local matches first)
+        const combined = new Set([...localMatches, ...apiMatches]);
+        
+        // Capitalize the first letter for consistency with the app style
+        const finalSuggestions = Array.from(combined).map(w => 
+            w.charAt(0).toUpperCase() + w.slice(1)
+        ).slice(0, 8); // Limit total suggestions
+
+        setSuggestions(finalSuggestions);
+        setShowSuggestions(finalSuggestions.length > 0);
+
+    }, 300); // 300ms debounce
+
+    return () => {
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [query, savedWords]);
 
   // Click outside to close dropdown
   useEffect(() => {

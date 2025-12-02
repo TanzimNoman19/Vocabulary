@@ -6,7 +6,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { streamDefinition, generateAsciiArt, AsciiArtData } from './services/geminiService';
 import { SRSItem, Grade, calculateSRS, initializeSRSItem } from './services/srsService';
-import { DICTIONARY_WORDS } from './services/dictionaryData';
 import { supabase, saveUserData, getUserData } from './services/supabaseClient';
 import ContentDisplay from './components/ContentDisplay';
 import SearchBar from './components/SearchBar';
@@ -16,13 +15,12 @@ import SavedWordsList from './components/SavedWordsList';
 import ChatInterface from './components/ChatInterface';
 import FlashcardView from './components/FlashcardView';
 import AuthModal from './components/AuthModal';
+import StoryView from './components/StoryView';
 
 // Curated sophisticated words for the random button
 const SOPHISTICATED_WORDS = [
   'Ephemeral', 'Serendipity', 'Obfuscate', 'Cacophony', 'Mellifluous', 'Labyrinthine', 'Quixotic', 'Ineffable', 'Petrichor', 'Sonder', 'Vellichor', 'Opia', 'Eccedentesiast', 'Phosphenes', 'Defenestration', 'Sycophant', 'Ubiquitous', 'Machiavellian', 'Narcissist', 'Stoic', 'Altruism', 'Pragmatic', 'Esoteric', 'Nefarious', 'Pernicious', 'Alacrity', 'Proclivity', 'Propensity', 'Penchant', 'Predilection', 'Anachronism', 'Iconoclast', 'Demagogue', 'Epiphany', 'Euphemism', 'Hyperbole', 'Metaphor', 'Oxymoron', 'Paradox', 'Rhetoric', 'Satire', 'Syntax', 'Vernacular', 'Zephyr', 'Zenith', 'Nadir', 'Apex', 'Apogee', 'Perigee'
 ];
-
-const UNIQUE_WORDS = [...new Set(DICTIONARY_WORDS)];
 
 /**
  * Creates a simple ASCII art bounding box as a fallback.
@@ -98,12 +96,7 @@ const App: React.FC = () => {
 
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isFlashcardsOpen, setIsFlashcardsOpen] = useState<boolean>(false);
-
-  // Combine predefined words and saved words for autocomplete
-  const suggestionWords = useMemo(() => {
-    const unique = new Set([...UNIQUE_WORDS, ...savedWords]);
-    return Array.from(unique).sort();
-  }, [savedWords]);
+  const [isStoryModeOpen, setIsStoryModeOpen] = useState<boolean>(false);
 
   // Derive Display Name (Username > Email)
   const userDisplayName = useMemo(() => {
@@ -497,7 +490,7 @@ const App: React.FC = () => {
         canBack={currentIndex > 0}
         canForward={currentIndex < history.length - 1}
         isAtHome={!currentTopic}
-        suggestionWords={suggestionWords}
+        savedWords={savedWords}
         onOpenAuth={() => setIsAuthOpen(true)}
         userDisplayName={userDisplayName}
       />
@@ -553,11 +546,27 @@ const App: React.FC = () => {
         />
       )}
 
+      {isStoryModeOpen && (
+        <StoryView 
+            onClose={() => setIsStoryModeOpen(false)}
+            onNavigate={(word) => {
+                navigateTo(word);
+                // We keep Story mode open in background, or we could close it.
+                // Request says "clicking will open the wiki".
+                // Usually this means replacing view.
+                setIsStoryModeOpen(false); 
+            }}
+        />
+      )}
+
       {!currentTopic ? (
         /* Home View */
         <div className="home-view">
             <h1 className="app-title-large">INFINITE VOCABULARY</h1>
             <div className="home-buttons">
+                <button className="home-btn" onClick={() => setIsStoryModeOpen(true)}>
+                    Story Mode
+                </button>
                 <button className="home-btn" onClick={handleRandom} disabled={isLoading}>
                     Random Word
                 </button>
