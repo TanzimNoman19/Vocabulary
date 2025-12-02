@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -128,23 +129,19 @@ const App: React.FC = () => {
       if (cloudData.srsData) setSrsData(cloudData.srsData);
       if (cloudData.viewHistory) setViewHistory(cloudData.viewHistory);
     } else {
-      // New user or no data yet?
-      // Check if we have "Guest Data" (data in refs that is not empty)
-      const hasGuestData = savedWordsRef.current.length > 0 || viewHistoryRef.current.length > 0;
+      // User is new or has no data.
+      // Explicitly RESET local state to start fresh, as per user request.
+      // Do not sync guest data.
+      setSavedWords([]);
+      setSrsData({});
+      setViewHistory([]);
       
-      if (hasGuestData) {
-         // Upload guest data to the new account
-         saveToSupabase(userId, { 
-             savedWords: savedWordsRef.current, 
-             srsData: srsDataRef.current, 
-             viewHistory: viewHistoryRef.current 
-         });
-      } else {
-         // No guest data, ensure state is clean
-         setSavedWords([]);
-         setSrsData({});
-         setViewHistory([]);
-      }
+      // Save this empty state to initialize the cloud row
+      saveToSupabase(userId, { 
+          savedWords: [], 
+          srsData: {}, 
+          viewHistory: [] 
+      });
     }
     setIsLoading(false);
   };
