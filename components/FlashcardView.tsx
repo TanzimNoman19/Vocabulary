@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -303,7 +302,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({ onClose, savedWords, srsD
     // Threshold for swipe
     if (Math.abs(deltaY) > 50) { 
       // ONLY perform swipe actions if the card is NOT flipped (revealed)
-      if (!isFlipped) {
+      if (!isFlipped && currentWord) {
         wasSwipeRef.current = true;
         if (deltaY > 0) {
           handleNext(); // Swipe UP -> Next
@@ -321,34 +320,20 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({ onClose, savedWords, srsD
       wasSwipeRef.current = false;
       return;
     }
-    if (!isFlipped) {
+    if (!isFlipped && currentWord) {
       setIsFlipped(true);
     }
   };
 
   const isSaved = savedWords.some(w => w.toLowerCase() === currentWord.toLowerCase());
-
-  if (!currentWord && !isLoading && mode === 'saved') {
-    return (
-      <div className="flashcard-overlay">
-        <div className="flashcard-container empty">
-          <div className="flashcard-header">
-            <button onClick={onClose} className="close-button">Close</button>
-          </div>
-          <h2>All caught up!</h2>
-          <p>You have mastered all due words for now.</p>
-          <p className="card-instruction">Review later to increase mastery.</p>
-          <button onClick={() => setMode('random')} className="mode-toggle-btn">
-            Practice Random Words
-          </button>
-        </div>
-      </div>
-    );
-  }
+  
+  // Check if we are in empty state for saved mode
+  const isSavedEmpty = mode === 'saved' && !currentWord && !isLoading;
 
   return (
     <div className="flashcard-overlay" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="flashcard-container">
+        {/* Header - Always Visible */}
         <div className="flashcard-header">
           <div className="mode-toggle">
             <button 
@@ -363,129 +348,147 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({ onClose, savedWords, srsD
           <button onClick={onClose} className="close-button">✕</button>
         </div>
 
-        <div className={`card ${isFlipped ? 'flipped' : ''}`} onClick={handleCardClick}>
-          <div className="card-inner">
-            {/* Front */}
-            <div className="card-front">
-               {isLoading ? (
-                 <div className="loading-spinner">Loading...</div>
-               ) : (
-                 <>
-                   <h1 className="card-word">{currentWord}</h1>
-                   <p className="card-instruction">Tap to reveal</p>
-                 </>
-               )}
-            </div>
-
-            {/* Back */}
-            <div className="card-back">
-              <div className="card-content" style={{ width: '100%' }}>
-                <div className="card-header-back">
-                  <h2 
-                    className="card-word-small interactive-word" 
-                    onClick={(e) => { e.stopPropagation(); handleInternalNavigate(currentWord); }}
-                    style={{ cursor: 'pointer', marginRight: 'auto' }}
-                  >
-                    {currentWord}
-                  </h2>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onToggleSave(currentWord); }}
-                    className={`save-icon-btn ${isSaved ? 'saved' : ''}`}
-                    title={isSaved ? "Remove from saved" : "Save word"}
-                  >
-                    {isSaved ? '★' : '☆'}
-                  </button>
+        {/* Card Area */}
+        {isSavedEmpty ? (
+             <div className="card" style={{ cursor: 'default' }}>
+                <div className="card-inner">
+                    <div className="card-front" style={{ background: 'transparent', boxShadow: 'none', border: 'none' }}>
+                        <h2>All caught up!</h2>
+                        <p>You have mastered all due words for now.</p>
+                        <p className="card-instruction">Review later to increase mastery.</p>
+                        <button onClick={() => setMode('random')} className="mode-toggle-btn" style={{ marginTop: '1rem', border: '1px solid currentColor', padding: '0.5rem 1rem', borderRadius: '20px' }}>
+                            Practice Random Words
+                        </button>
+                    </div>
                 </div>
-                
-                {/* Collapsible Sections */}
-                
-                {cardData.definition && (
-                  <CollapsibleSection 
-                    title="Definition" 
-                    isOpen={expandedSections.definition} 
-                    onToggle={() => toggleSection('definition')}
-                  >
-                    <p><InteractiveText text={cardData.definition} onNavigate={handleInternalNavigate} /></p>
-                  </CollapsibleSection>
+             </div>
+        ) : (
+            <div className={`card ${isFlipped ? 'flipped' : ''}`} onClick={handleCardClick}>
+            <div className="card-inner">
+                {/* Front */}
+                <div className="card-front">
+                {isLoading ? (
+                    <div className="loading-spinner">Loading...</div>
+                ) : (
+                    <>
+                    <h1 className="card-word">{currentWord}</h1>
+                    <p className="card-instruction">Tap to reveal</p>
+                    </>
                 )}
+                </div>
 
-                {cardData.etymology && (
-                  <CollapsibleSection 
-                    title="Etymology" 
-                    isOpen={expandedSections.etymology} 
-                    onToggle={() => toggleSection('etymology')}
-                  >
-                     <p><InteractiveText text={cardData.etymology} onNavigate={handleInternalNavigate} /></p>
-                  </CollapsibleSection>
-                )}
+                {/* Back */}
+                <div className="card-back">
+                <div className="card-content" style={{ width: '100%' }}>
+                    <div className="card-header-back">
+                    <h2 
+                        className="card-word-small interactive-word" 
+                        onClick={(e) => { e.stopPropagation(); handleInternalNavigate(currentWord); }}
+                        style={{ cursor: 'pointer', marginRight: 'auto' }}
+                    >
+                        {currentWord}
+                    </h2>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onToggleSave(currentWord); }}
+                        className={`save-icon-btn ${isSaved ? 'saved' : ''}`}
+                        title={isSaved ? "Remove from saved" : "Save word"}
+                    >
+                        {isSaved ? '★' : '☆'}
+                    </button>
+                    </div>
+                    
+                    {/* Collapsible Sections */}
+                    
+                    {cardData.definition && (
+                    <CollapsibleSection 
+                        title="Definition" 
+                        isOpen={expandedSections.definition} 
+                        onToggle={() => toggleSection('definition')}
+                    >
+                        <p><InteractiveText text={cardData.definition} onNavigate={handleInternalNavigate} /></p>
+                    </CollapsibleSection>
+                    )}
 
-                {cardData.synonyms && (
-                  <CollapsibleSection 
-                    title="Synonyms" 
-                    isOpen={expandedSections.synonyms} 
-                    onToggle={() => toggleSection('synonyms')}
-                  >
-                     <p><InteractiveText text={cardData.synonyms} onNavigate={handleInternalNavigate} /></p>
-                  </CollapsibleSection>
-                )}
+                    {cardData.etymology && (
+                    <CollapsibleSection 
+                        title="Etymology" 
+                        isOpen={expandedSections.etymology} 
+                        onToggle={() => toggleSection('etymology')}
+                    >
+                        <p><InteractiveText text={cardData.etymology} onNavigate={handleInternalNavigate} /></p>
+                    </CollapsibleSection>
+                    )}
 
-                {cardData.antonyms && cardData.antonyms !== "N/A" && (
-                  <CollapsibleSection 
-                    title="Antonyms" 
-                    isOpen={expandedSections.antonyms} 
-                    onToggle={() => toggleSection('antonyms')}
-                  >
-                     <p><InteractiveText text={cardData.antonyms} onNavigate={handleInternalNavigate} /></p>
-                  </CollapsibleSection>
-                )}
+                    {cardData.synonyms && (
+                    <CollapsibleSection 
+                        title="Synonyms" 
+                        isOpen={expandedSections.synonyms} 
+                        onToggle={() => toggleSection('synonyms')}
+                    >
+                        <p><InteractiveText text={cardData.synonyms} onNavigate={handleInternalNavigate} /></p>
+                    </CollapsibleSection>
+                    )}
 
-                {cardData.usage && (
-                  <CollapsibleSection 
-                    title="Usage" 
-                    isOpen={expandedSections.usage} 
-                    onToggle={() => toggleSection('usage')}
-                    actionButton={
-                      <button className="refresh-icon" onClick={refreshUsage} title="Get another example">
-                        ↻
-                      </button>
-                    }
-                  >
-                     <p>"<InteractiveText text={cardData.usage} onNavigate={handleInternalNavigate} />"</p>
-                  </CollapsibleSection>
-                )}
+                    {cardData.antonyms && cardData.antonyms !== "N/A" && (
+                    <CollapsibleSection 
+                        title="Antonyms" 
+                        isOpen={expandedSections.antonyms} 
+                        onToggle={() => toggleSection('antonyms')}
+                    >
+                        <p><InteractiveText text={cardData.antonyms} onNavigate={handleInternalNavigate} /></p>
+                    </CollapsibleSection>
+                    )}
 
-                {cardData.mnemonic && (
-                  <CollapsibleSection 
-                    title="Mnemonic" 
-                    isOpen={expandedSections.mnemonic} 
-                    onToggle={() => toggleSection('mnemonic')}
-                  >
-                     <p><InteractiveText text={cardData.mnemonic} onNavigate={handleInternalNavigate} /></p>
-                  </CollapsibleSection>
-                )}
+                    {cardData.usage && (
+                    <CollapsibleSection 
+                        title="Usage" 
+                        isOpen={expandedSections.usage} 
+                        onToggle={() => toggleSection('usage')}
+                        actionButton={
+                        <button className="refresh-icon" onClick={refreshUsage} title="Get another example">
+                            ↻
+                        </button>
+                        }
+                    >
+                        <p>"<InteractiveText text={cardData.usage} onNavigate={handleInternalNavigate} />"</p>
+                    </CollapsibleSection>
+                    )}
 
-              </div>
+                    {cardData.mnemonic && (
+                    <CollapsibleSection 
+                        title="Mnemonic" 
+                        isOpen={expandedSections.mnemonic} 
+                        onToggle={() => toggleSection('mnemonic')}
+                    >
+                        <p><InteractiveText text={cardData.mnemonic} onNavigate={handleInternalNavigate} /></p>
+                    </CollapsibleSection>
+                    )}
+
+                </div>
+                </div>
             </div>
-          </div>
-        </div>
+            </div>
+        )}
 
-        {/* Controls Area */}
-        <div className="flashcard-controls">
-          {!isFlipped ? (
-             <button className="reveal-btn" onClick={() => setIsFlipped(true)} disabled={isLoading}>
-               Reveal
-             </button>
-          ) : (
-             mode === 'saved' ? (
-               <div className="srs-buttons simple">
-                 <button className="srs-btn dont-know" onClick={() => handleGrade('dont_know')}>Don't Know</button>
-                 <button className="srs-btn know" onClick={() => handleGrade('know')}>Know</button>
-               </div>
-             ) : (
-               <button className="next-btn" onClick={handleNext}>Next Word</button>
-             )
-          )}
-        </div>
+        {/* Controls Area (Only show if not empty) */}
+        {!isSavedEmpty && (
+            <div className="flashcard-controls">
+            {!isFlipped ? (
+                <button className="reveal-btn" onClick={() => setIsFlipped(true)} disabled={isLoading}>
+                Reveal
+                </button>
+            ) : (
+                mode === 'saved' ? (
+                <div className="srs-buttons simple">
+                    <button className="srs-btn dont-know" onClick={() => handleGrade('dont_know')}>Don't Know</button>
+                    <button className="srs-btn know" onClick={() => handleGrade('know')}>Know</button>
+                </div>
+                ) : (
+                <button className="next-btn" onClick={handleNext}>Next Word</button>
+                )
+            )}
+            </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
 
-
 :root {
   /* Light Theme Variables */
   --bg-color: #ffffff;
@@ -720,50 +719,71 @@ button {
     box-shadow: 0 1px 3px var(--shadow-color);
 }
 
-/* Card Flip Logic */
+/* Simplified Card Flip Logic */
 .card {
     flex-grow: 1;
-    perspective: 1000px;
     cursor: pointer;
     margin-bottom: 1rem;
+    position: relative; /* Ensure context */
 }
 
 .card-inner {
     position: relative;
     width: 100%;
     height: 100%;
-    transition: transform 0.6s;
-    transform-style: preserve-3d;
+    /* No 3D transform */
     box-shadow: 0 4px 15px var(--shadow-color);
     border-radius: 16px;
-}
-
-.card.flipped .card-inner {
-    transform: rotateY(180deg);
+    background-color: var(--card-bg);
+    overflow: hidden; /* clean edges */
+    border: 1px solid var(--border-color);
 }
 
 .card-front, .card-back {
     position: absolute;
     width: 100%;
     height: 100%;
-    backface-visibility: hidden;
-    background-color: var(--card-bg);
-    border-radius: 16px;
+    top: 0;
+    left: 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border-color);
     padding: 2rem;
     box-sizing: border-box;
     overflow-y: auto;
+    background-color: var(--card-bg);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.card-front {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 2;
+    align-items: center;
+    justify-content: center;
 }
 
 .card-back {
-    transform: rotateY(180deg);
-    justify-content: flex-start;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
     align-items: flex-start;
+    justify-content: flex-start;
     text-align: left;
+    transform: scale(0.95);
+}
+
+/* Flipped State */
+.card.flipped .card-front {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.95);
+}
+
+.card.flipped .card-back {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 2;
+    transform: scale(1);
 }
 
 .card-word {
@@ -999,6 +1019,48 @@ button {
     border: 1px solid var(--success-color);
 }
 
+/* Google Login & Divider */
+.auth-google-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.7rem;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    transition: background-color 0.2s;
+    margin-bottom: 0;
+}
+
+.auth-google-btn:hover {
+    background-color: var(--bg-color-secondary);
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 1.5rem 0;
+    color: var(--text-color-muted);
+    font-size: 0.8rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.auth-divider span {
+    padding: 0 10px;
+}
+
 /* STORY MODE STYLES */
 .story-overlay {
     position: fixed;
@@ -1121,9 +1183,15 @@ button {
     cursor: pointer;
     border-bottom: 1px solid transparent;
     transition: border-color 0.2s;
+    position: relative;
 }
 .story-word:hover {
-    border-bottom-color: var(--accent-color);
+    border-bottom-color: var(--text-color-muted);
+}
+.story-word.active {
+    background-color: var(--highlight-color);
+    border-radius: 3px;
+    color: var(--text-color);
 }
 
 .story-controls {
@@ -1158,18 +1226,48 @@ button {
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     z-index: 2000;
-    max-width: 250px;
+    width: 250px;
     font-size: 0.9rem;
-    pointer-events: none; /* Let clicks pass through if needed, but here we block prop */
-    pointer-events: auto;
     animation: fadeIn 0.2s ease;
 }
 
-.tooltip strong {
-    display: block;
-    margin-bottom: 0.5rem;
+.tooltip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(128,128,128,0.3);
+}
+
+.tooltip-header strong {
     text-transform: capitalize;
     color: var(--gold-color);
+    font-size: 1rem;
+}
+
+.tooltip-pos {
+    font-weight: normal;
+    color: var(--bg-color);
+    opacity: 0.7;
+    margin-left: 6px;
+    font-size: 0.85em;
+}
+
+.wiki-icon-btn {
+    background: none;
+    border: none;
+    color: var(--bg-color); /* Contrast against dark tooltip bg */
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+.wiki-icon-btn:hover {
+    background-color: rgba(255,255,255,0.2);
 }
 
 .tooltip p {
@@ -1208,4 +1306,3 @@ button {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
-

@@ -204,7 +204,12 @@ export async function getRandomWord(): Promise<string> {
     throw new Error('API_KEY is not configured.');
   }
 
-  const prompt = `Generate a single, interesting, sophisticated English vocabulary word (SAT/GRE level). Examples: "Ephemeral", "Obfuscate", "Serendipity", "Petrichor". Respond with only the word itself, no punctuation.`;
+  // Adding a timestamp/random seed to force non-cached, unique results
+  const randomSeed = Math.floor(Math.random() * 100000);
+  const prompt = `Generate a single, interesting, sophisticated English vocabulary word (SAT/GRE level). 
+  It must be random and unique each time. Random seed: ${randomSeed}.
+  Examples of difficulty: "Ephemeral", "Obfuscate", "Serendipity", "Petrichor". 
+  Respond with only the word itself, no punctuation.`;
 
   try {
     const response = await getAiClient().models.generateContent({
@@ -213,6 +218,7 @@ export async function getRandomWord(): Promise<string> {
       config: {
         // Disable thinking for low latency.
         thinkingConfig: { thinkingBudget: 0 },
+        temperature: 1.2, // High temperature for maximum randomness
       },
     });
     return response.text.trim();
@@ -312,7 +318,8 @@ export async function generateStorySegment(userContext: string, previousText: st
 export async function getShortDefinition(word: string): Promise<string> {
   if (!process.env.API_KEY) return "Definition unavailable";
 
-  const prompt = `Define "${word}" in 6 words or less. Extremely concise.`;
+  // Requesting specific format to separate POS and Definition
+  const prompt = `Define "${word}". Output strictly in this format: "(pos) Definition". Keep definition under 6 words. Example: "(n) A sweet fruit."`;
 
   try {
     const response = await getAiClient().models.generateContent({
