@@ -14,9 +14,13 @@ interface AuthModalProps {
 
 const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEmail, onSignOut }) => {
   const [isLogin, setIsLogin] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false); // New state for OTP mode
+  
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState(''); // State for the code
+  
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
 
@@ -32,9 +36,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
           password,
         });
         if (error) throw error;
-        // Successful login will trigger the onAuthStateChange in App.tsx
         onClose();
       } else {
+        // Sign Up Flow
         if (!username.trim()) {
             throw new Error("Username is required");
         }
@@ -48,10 +52,35 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
           }
         });
         if (error) throw error;
-        setMessage({ text: 'Check your email for the confirmation link!', type: 'success' });
+        
+        // Switch to Verification Mode instead of closing
+        setIsVerifying(true);
+        setMessage({ text: 'Confirmation code sent to your email!', type: 'success' });
       }
     } catch (error: any) {
       setMessage({ text: error.message || 'Authentication failed', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'signup'
+      });
+      if (error) throw error;
+      
+      // Verification successful, user is now logged in
+      onClose();
+    } catch (error: any) {
+      setMessage({ text: error.message || 'Verification failed', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -86,63 +115,97 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
     <div className="auth-overlay">
       <div className="auth-container">
         <div className="auth-header">
-          <h3>{isLogin ? 'Welcome Back' : 'Create Account'}</h3>
+          <h3>
+            {isVerifying ? 'Enter Code' : (isLogin ? 'Welcome Back' : 'Create Account')}
+          </h3>
           <button onClick={onClose} className="close-button">✕</button>
         </div>
         
-        <form onSubmit={handleAuth} className="auth-form">
-          {message && (
-            <div className={`auth-message ${message.type}`}>
+        {message && (
+            <div className={`auth-message ${message.type}`} style={{ marginBottom: '1rem' }}>
               {message.text}
             </div>
-          )}
-          
-          {!isLogin && (
-            <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required={!isLogin}
-                className="auth-input"
-                minLength={3}
-            />
-          )}
+        )}
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="auth-input"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="auth-input"
-            minLength={6}
-          />
-          
-          <button type="submit" className="auth-btn primary" disabled={loading}>
-            {loading ? 'Processing...' : (isLogin ? 'Log In' : 'Sign Up')}
-          </button>
-        </form>
-        
-        <div className="auth-footer">
-          <p>
-            {isLogin ? "Don't have an account? " : "Already have an account? "}
-            <button 
-              className="auth-link-btn"
-              onClick={() => { setIsLogin(!isLogin); setMessage(null); }}
-            >
-              {isLogin ? 'Sign Up' : 'Log In'}
+        {isVerifying ? (
+          // --- OTP VERIFICATION FORM ---
+          <form onSubmit={handleVerify} className="auth-form">
+            <p style={{textAlign: 'center', fontSize: '0.9rem'}}>
+                Please enter the 6-digit code sent to <strong>{email}</strong>
+            </p>
+            <input
+              type="text"
+              placeholder="123456"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              required
+              className="auth-input"
+              style={{ textAlign: 'center', letterSpacing: '0.2em', fontSize: '1.2rem' }}
+            />
+            <button type="submit" className="auth-btn primary" disabled={loading}>
+              {loading ? 'Verifying...' : 'Verify Code'}
             </button>
-          </p>
-        </div>
+            <button 
+              type="button" 
+              className="auth-link-btn" 
+              onClick={() => setIsVerifying(false)}
+              style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}
+            >
+              Back to Sign Up
+            </button>
+          </form>
+        ) : (
+          // --- LOGIN / SIGNUP FORM ---
+          <form onSubmit={handleAuth} className="auth-form">
+            {!isLogin && (
+              <input
+                  type="text"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required={!isLogin}
+                  className="auth-input"
+                  minLength={3}
+              />
+            )}
+
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="auth-input"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="auth-input"
+              minLength={6}
+            />
+            
+            <button type="submit" className="auth-btn primary" disabled={loading}>
+              {loading ? 'Processing...' : (isLogin ? 'Log In' : 'Sign Up')}
+            </button>
+          </form>
+        )}
+        
+        {!isVerifying && (
+          <div className="auth-footer">
+            <p>
+              {isLogin ? "Don't have an account? " : "Already have an account? "}
+              <button 
+                className="auth-link-btn"
+                onClick={() => { setIsLogin(!isLogin); setMessage(null); }}
+              >
+                {isLogin ? 'Sign Up' : 'Log In'}
+              </button>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

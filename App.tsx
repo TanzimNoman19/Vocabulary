@@ -143,10 +143,31 @@ const App: React.FC = () => {
     setIsLoading(false);
   };
 
+  const resetLocalState = () => {
+      setUser(null);
+      setSavedWords([]);
+      setSrsData({});
+      setViewHistory([]);
+      setHistory(['']); // Reset navigation history
+      setCurrentIndex(0);
+      
+      localStorage.removeItem('savedWords');
+      localStorage.removeItem('srsData');
+      localStorage.removeItem('viewHistory');
+      localStorage.removeItem('sb-oiegbafyoddklymbiuza-auth-token'); // Clear Supabase specific token if needed
+  };
+
   // Auth Session Init
   useEffect(() => {
     // Check active session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+         console.warn("Session Init Error (likely invalid token):", error.message);
+         // If token is invalid (Refresh Token Not Found), clear local storage to fix the loop
+         resetLocalState();
+         return;
+      }
+      
       setUser(session?.user ?? null);
       if (session?.user) {
         loadDataFromSupabase(session.user.id);
@@ -166,19 +187,6 @@ const App: React.FC = () => {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  const resetLocalState = () => {
-      setUser(null);
-      setSavedWords([]);
-      setSrsData({});
-      setViewHistory([]);
-      setHistory(['']); // Reset navigation history
-      setCurrentIndex(0);
-      
-      localStorage.removeItem('savedWords');
-      localStorage.removeItem('srsData');
-      localStorage.removeItem('viewHistory');
-  };
 
   // Sync Data to Supabase (Debounced)
   const saveToSupabase = (userId: string, data: any) => {
