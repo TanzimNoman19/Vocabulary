@@ -1,6 +1,5 @@
 
 
-
 :root {
   /* Light Theme Variables */
   --bg-color: #ffffff;
@@ -182,9 +181,23 @@ button {
   justify-content: center;
   border-radius: 50%;
   transition: background 0.2s;
+  position: relative;
 }
 .theme-toggle-btn:hover {
   background: var(--button-bg);
+}
+.theme-toggle-btn.active-user {
+  color: var(--accent-color);
+}
+.user-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background-color: var(--success-color);
+  border-radius: 50%;
+  border: 1px solid var(--bg-color);
 }
 
 /* Autocomplete Dropdown */
@@ -624,6 +637,122 @@ button {
 }
 .undo-btn:hover {
   text-decoration: underline;
+}
+
+/* Auth Modal Styles */
+.auth-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 4000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.auth-container {
+  background: var(--card-bg);
+  padding: 2rem;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 10px 30px var(--shadow-color);
+  animation: fadeIn 0.3s ease;
+}
+
+.auth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+.auth-header h3 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-input {
+  padding: 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  font-size: 1rem;
+}
+.auth-input:focus {
+  border-color: var(--accent-color);
+  outline: none;
+}
+
+.auth-btn {
+  padding: 0.8rem;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.auth-btn.primary {
+  background: var(--button-active-bg);
+  color: var(--button-active-text);
+}
+.auth-btn.logout {
+    border: 1px solid var(--error-color);
+    color: var(--error-color);
+    width: 100%;
+}
+.auth-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+}
+
+.auth-link-btn {
+  color: var(--accent-color);
+  text-decoration: underline;
+  font-weight: bold;
+}
+
+.auth-message {
+  padding: 0.8rem;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+.auth-message.error {
+  background: rgba(229, 57, 53, 0.1);
+  color: var(--error-color);
+}
+.auth-message.success {
+  background: rgba(67, 160, 71, 0.1);
+  color: var(--success-color);
+}
+
+.auth-email {
+    text-align: center;
+    font-weight: bold;
+    margin: 1rem 0;
+    font-size: 1.1rem;
+}
+.auth-note {
+    text-align: center;
+    color: var(--text-color-muted);
+    font-size: 0.85rem;
+    margin-top: 2rem;
 }
 
 /* Chat Interface Styles */

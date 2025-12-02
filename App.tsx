@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { streamDefinition, generateAsciiArt, AsciiArtData } from './services/geminiService';
 import { SRSItem, Grade, calculateSRS, initializeSRSItem } from './services/srsService';
 import { DICTIONARY_WORDS } from './services/dictionaryData';
+import { supabase, saveUserData, getUserData } from './services/supabaseClient';
 import ContentDisplay from './components/ContentDisplay';
 import SearchBar from './components/SearchBar';
 import LoadingSkeleton from './components/LoadingSkeleton';
@@ -14,6 +15,7 @@ import AsciiArtDisplay from './components/AsciiArtDisplay';
 import SavedWordsList from './components/SavedWordsList';
 import ChatInterface from './components/ChatInterface';
 import FlashcardView from './components/FlashcardView';
+import AuthModal from './components/AuthModal';
 
 // Curated sophisticated words for the random button
 const SOPHISTICATED_WORDS = [
@@ -76,6 +78,21 @@ const App: React.FC = () => {
     return data ? JSON.parse(data) : {};
   });
 
+  // Refs to hold current state for async auth callbacks to avoid stale closures
+  const savedWordsRef = useRef(savedWords);
+  const srsDataRef = useRef(srsData);
+  const viewHistoryRef = useRef(viewHistory);
+
+  // Update refs on every render
+  savedWordsRef.current = savedWords;
+  srsDataRef.current = srsData;
+  viewHistoryRef.current = viewHistory;
+
+  // Auth State
+  const [user, setUser] = useState<any>(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const syncTimeoutRef = useRef<number | null>(null);
+
   const [isSavedListOpen, setIsSavedListOpen] = useState<boolean>(false);
   const [listMode, setListMode] = useState<'saved' | 'history'>('saved');
 
@@ -88,18 +105,104 @@ const App: React.FC = () => {
     return Array.from(unique).sort();
   }, [savedWords]);
 
-  // Persistence effects
+  // Derive Display Name (Username > Email)
+  const userDisplayName = useMemo(() => {
+    if (!user) return null;
+    return user.user_metadata?.username || user.email;
+  }, [user]);
+
+  // Fetch Data on Login
+  const loadDataFromSupabase = async (userId: string) => {
+    setIsLoading(true);
+    const cloudData = await getUserData(userId);
+    
+    if (cloudData) {
+      // User has data in cloud, overwrite local state
+      if (cloudData.savedWords) setSavedWords(cloudData.savedWords);
+      if (cloudData.srsData) setSrsData(cloudData.srsData);
+      if (cloudData.viewHistory) setViewHistory(cloudData.viewHistory);
+    } else {
+      // New user or no data yet?
+      // Check if we have "Guest Data" (data in refs that is not empty)
+      const hasGuestData = savedWordsRef.current.length > 0 || viewHistoryRef.current.length > 0;
+      
+      if (hasGuestData) {
+         // Upload guest data to the new account
+         saveToSupabase(userId, { 
+             savedWords: savedWordsRef.current, 
+             srsData: srsDataRef.current, 
+             viewHistory: viewHistoryRef.current 
+         });
+      } else {
+         // No guest data, ensure state is clean
+         setSavedWords([]);
+         setSrsData({});
+         setViewHistory([]);
+      }
+    }
+    setIsLoading(false);
+  };
+
+  // Auth Session Init
+  useEffect(() => {
+    // Check active session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        loadDataFromSupabase(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+         resetLocalState();
+      } else if (session?.user && event === 'SIGNED_IN') {
+         setUser(session.user);
+         loadDataFromSupabase(session.user.id);
+      } else if (session?.user) {
+         setUser(session.user);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const resetLocalState = () => {
+      setUser(null);
+      setSavedWords([]);
+      setSrsData({});
+      setViewHistory([]);
+      setHistory(['']); // Reset navigation history
+      setCurrentIndex(0);
+      
+      localStorage.removeItem('savedWords');
+      localStorage.removeItem('srsData');
+      localStorage.removeItem('viewHistory');
+  };
+
+  // Sync Data to Supabase (Debounced)
+  const saveToSupabase = (userId: string, data: any) => {
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = window.setTimeout(() => {
+      saveUserData(userId, data);
+    }, 2000); // 2 second debounce
+  };
+
+  // Local Persistence & Cloud Sync effects
   useEffect(() => {
     localStorage.setItem('savedWords', JSON.stringify(savedWords));
-  }, [savedWords]);
+    if (user) saveToSupabase(user.id, { savedWords, srsData, viewHistory });
+  }, [savedWords, user]);
   
   useEffect(() => {
     localStorage.setItem('srsData', JSON.stringify(srsData));
-  }, [srsData]);
+    if (user) saveToSupabase(user.id, { savedWords, srsData, viewHistory });
+  }, [srsData, user]);
 
   useEffect(() => {
     localStorage.setItem('viewHistory', JSON.stringify(viewHistory));
-  }, [viewHistory]);
+    if (user) saveToSupabase(user.id, { savedWords, srsData, viewHistory });
+  }, [viewHistory, user]);
 
   // Theme effect
   useEffect(() => {
@@ -110,6 +213,12 @@ const App: React.FC = () => {
   const toggleTheme = useCallback(() => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    resetLocalState();
+    setIsAuthOpen(false);
+  };
 
   const addToViewHistory = useCallback((word: string) => {
     if (!word) return;
@@ -152,8 +261,6 @@ const App: React.FC = () => {
   const handleBack = useCallback(() => {
     if (currentIndex > 0) {
         setCurrentIndex(prev => prev - 1);
-        // We don't re-add to viewHistory on back/forward to preserve the "chronological opened" order,
-        // but arguably one could. For now, we only track explicit opens.
     }
   }, [currentIndex]);
 
@@ -383,7 +490,18 @@ const App: React.FC = () => {
         canForward={currentIndex < history.length - 1}
         isAtHome={!currentTopic}
         suggestionWords={suggestionWords}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        userDisplayName={userDisplayName}
       />
+
+      {isAuthOpen && (
+        <AuthModal 
+          onClose={() => setIsAuthOpen(false)} 
+          userDisplayName={userDisplayName}
+          userEmail={user?.email}
+          onSignOut={handleSignOut}
+        />
+      )}
 
       {isSavedListOpen && (
         <SavedWordsList 
