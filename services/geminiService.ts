@@ -312,7 +312,7 @@ export async function generateStorySegment(userContext: string, previousText: st
 export async function getShortDefinition(word: string): Promise<string> {
   if (!process.env.API_KEY) return "Definition unavailable";
 
-  const prompt = `Define "${word}" in 10 words or less. Simple and direct.`;
+  const prompt = `Define "${word}" in 6 words or less. Extremely concise.`;
 
   try {
     const response = await getAiClient().models.generateContent({
@@ -326,6 +326,27 @@ export async function getShortDefinition(word: string): Promise<string> {
   }
 }
 
+/**
+ * Generates a creative random story prompt.
+ */
+export async function generateCreativePrompt(): Promise<string> {
+  if (!process.env.API_KEY) return STORY_PROMPTS[0];
+
+  const prompt = `Generate a single, creative, and evocative writing prompt for a short story. One sentence only.`;
+
+  try {
+    const response = await getAiClient().models.generateContent({
+      model: textModelName,
+      contents: prompt,
+      config: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+    return response.text.trim();
+  } catch (error) {
+    // Fallback to local list if API fails
+    const random = STORY_PROMPTS[Math.floor(Math.random() * STORY_PROMPTS.length)];
+    return random;
+  }
+}
 
 /**
  * Generates ASCII art and optionally text for a given topic.

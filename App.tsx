@@ -15,12 +15,14 @@ import SavedWordsList from './components/SavedWordsList';
 import ChatInterface from './components/ChatInterface';
 import FlashcardView from './components/FlashcardView';
 import AuthModal from './components/AuthModal';
-import StoryView from './components/StoryView';
+import StoryView, { StoryState } from './components/StoryView';
 
 // Curated sophisticated words for the random button
 const SOPHISTICATED_WORDS = [
   'Ephemeral', 'Serendipity', 'Obfuscate', 'Cacophony', 'Mellifluous', 'Labyrinthine', 'Quixotic', 'Ineffable', 'Petrichor', 'Sonder', 'Vellichor', 'Opia', 'Eccedentesiast', 'Phosphenes', 'Defenestration', 'Sycophant', 'Ubiquitous', 'Machiavellian', 'Narcissist', 'Stoic', 'Altruism', 'Pragmatic', 'Esoteric', 'Nefarious', 'Pernicious', 'Alacrity', 'Proclivity', 'Propensity', 'Penchant', 'Predilection', 'Anachronism', 'Iconoclast', 'Demagogue', 'Epiphany', 'Euphemism', 'Hyperbole', 'Metaphor', 'Oxymoron', 'Paradox', 'Rhetoric', 'Satire', 'Syntax', 'Vernacular', 'Zephyr', 'Zenith', 'Nadir', 'Apex', 'Apogee', 'Perigee'
 ];
+
+const STORY_TOPIC = '___STORY___';
 
 /**
  * Creates a simple ASCII art bounding box as a fallback.
@@ -76,6 +78,18 @@ const App: React.FC = () => {
     return data ? JSON.parse(data) : {};
   });
 
+  // Story Mode Persistent State
+  const [storyState, setStoryState] = useState<StoryState>({
+    prompt: '',
+    hasStarted: false,
+    segments: [],
+    currentIndex: 0
+  });
+
+  const updateStoryState = (newState: Partial<StoryState>) => {
+    setStoryState(prev => ({ ...prev, ...newState }));
+  };
+
   // Refs to hold current state for async auth callbacks to avoid stale closures
   const savedWordsRef = useRef(savedWords);
   const srsDataRef = useRef(srsData);
@@ -96,7 +110,6 @@ const App: React.FC = () => {
 
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isFlashcardsOpen, setIsFlashcardsOpen] = useState<boolean>(false);
-  const [isStoryModeOpen, setIsStoryModeOpen] = useState<boolean>(false);
 
   // Derive Display Name (Username > Email)
   const userDisplayName = useMemo(() => {
@@ -222,7 +235,7 @@ const App: React.FC = () => {
   };
 
   const addToViewHistory = useCallback((word: string) => {
-    if (!word) return;
+    if (!word || word === STORY_TOPIC) return;
     setViewHistory(prev => {
       // Remove word if it exists, then add to top
       const filtered = prev.filter(w => w.toLowerCase() !== word.toLowerCase());
@@ -247,7 +260,7 @@ const App: React.FC = () => {
         return;
     }
     
-    if (newTopic !== '') {
+    if (newTopic !== '' && newTopic !== STORY_TOPIC) {
         addToViewHistory(newTopic);
     }
 
@@ -276,7 +289,7 @@ const App: React.FC = () => {
   }, [navigateTo]);
 
   useEffect(() => {
-    if (!currentTopic) {
+    if (!currentTopic || currentTopic === STORY_TOPIC) {
         setContent('');
         setAsciiArt(null);
         return;
@@ -397,7 +410,7 @@ const App: React.FC = () => {
   }, [savedWords]);
 
   const toggleSaveCurrentWord = useCallback(() => {
-    if (currentTopic) handleToggleSave(currentTopic);
+    if (currentTopic && currentTopic !== STORY_TOPIC) handleToggleSave(currentTopic);
   }, [currentTopic, handleToggleSave]);
 
   const removeSavedWord = useCallback((wordToRemove: string) => {
@@ -476,6 +489,10 @@ const App: React.FC = () => {
   };
 
   const isCurrentWordSaved = savedWords.some(w => w.toLowerCase() === currentTopic.toLowerCase());
+  
+  const isHomeView = !currentTopic;
+  const isStoryView = currentTopic === STORY_TOPIC;
+  const isContentView = currentTopic && currentTopic !== STORY_TOPIC;
 
   return (
     <div>
@@ -546,25 +563,23 @@ const App: React.FC = () => {
         />
       )}
 
-      {isStoryModeOpen && (
+      {/* RENDER VIEW BASED ON TOPIC */}
+
+      {isStoryView && (
         <StoryView 
-            onClose={() => setIsStoryModeOpen(false)}
-            onNavigate={(word) => {
-                navigateTo(word);
-                // We keep Story mode open in background, or we could close it.
-                // Request says "clicking will open the wiki".
-                // Usually this means replacing view.
-                setIsStoryModeOpen(false); 
-            }}
+            onClose={() => navigateTo('')} // Exit to Home
+            onNavigate={(word) => navigateTo(word)}
+            state={storyState}
+            onUpdateState={updateStoryState}
         />
       )}
 
-      {!currentTopic ? (
+      {isHomeView && (
         /* Home View */
         <div className="home-view">
             <h1 className="app-title-large">INFINITE VOCABULARY</h1>
             <div className="home-buttons">
-                <button className="home-btn" onClick={() => setIsStoryModeOpen(true)}>
+                <button className="home-btn" onClick={() => navigateTo(STORY_TOPIC)}>
                     Story Mode
                 </button>
                 <button className="home-btn" onClick={handleRandom} disabled={isLoading}>
@@ -581,7 +596,9 @@ const App: React.FC = () => {
                 </button>
             </div>
         </div>
-      ) : (
+      )}
+
+      {isContentView && (
         /* Content View */
         <>
           <header style={{ textAlign: 'center', marginBottom: '2rem' }}>
