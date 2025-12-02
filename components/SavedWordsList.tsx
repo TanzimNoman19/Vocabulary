@@ -34,17 +34,16 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
   const [editingWord, setEditingWord] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   
+  // Active Item State (for Saved Mode)
+  const [activeWord, setActiveWord] = useState<string | null>(null);
+
   // Undo State
   const [undoItem, setUndoItem] = useState<{ word: string, srsItem: SRSItem } | null>(null);
   const undoTimeoutRef = useRef<number | null>(null);
 
-  // Long Press Refs
-  const pressTimer = useRef<number | null>(null);
-
   useEffect(() => {
     return () => {
       if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-      if (pressTimer.current) clearTimeout(pressTimer.current);
     };
   }, []);
 
@@ -133,33 +132,20 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     }
   };
 
-  // --- Long Press Edit Logic (Only for Saved Mode) ---
-  const startPress = (word: string) => {
-    if (mode === 'history') return; // Disable edit in history
-    pressTimer.current = window.setTimeout(() => {
-      setEditingWord(word);
-      setEditValue(word);
-    }, 600); 
-  };
-
-  const cancelPress = () => {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current);
-      pressTimer.current = null;
-    }
-  };
-
   const submitEdit = () => {
     if (editingWord && editValue.trim()) {
         onEdit(editingWord, editValue.trim());
     }
     setEditingWord(null);
+    setActiveWord(null);
+  };
+
+  const handleEditClick = (word: string) => {
+      setEditingWord(word);
+      setEditValue(word);
   };
 
   const sortedWords = useMemo(() => {
-    // If History mode, typically we just want recent first (which is how `words` comes in).
-    // But user might want to sort history alphabetically too.
-    
     const items = words.map((word, index) => ({
       word,
       timeScore: words.length - index, // Assumes input array is ordered by time (newest or oldest)
@@ -285,54 +271,80 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                        onBlur={submitEdit}
                        onKeyDown={(e) => e.key === 'Enter' && submitEdit()}
                      />
-                     <button 
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={(e) => handleRemoveClick(e, word)} 
-                        className="delete-btn-edit-mode"
-                     >
-                        Delete
-                     </button>
                    </div>
                 ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
-                     <div 
-                        style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1 }}
-                        onMouseDown={() => startPress(word)}
-                        onMouseUp={cancelPress}
-                        onMouseLeave={cancelPress}
-                        onTouchStart={() => startPress(word)}
-                        onTouchEnd={cancelPress}
-                     >
-                        <button 
-                            onClick={() => { onClose(); onSelect(word); }} 
-                            className="word-button"
-                            style={{ userSelect: 'none' }}
-                        >
-                            {word}
-                        </button>
-                        {mode === 'saved' && renderMasteryDots(word)}
+                  <div 
+                    className={`saved-item-row ${mode === 'saved' ? 'clickable-row' : ''}`}
+                    onClick={() => mode === 'saved' && setActiveWord(activeWord === word ? null : word)}
+                  >
+                     {/* Word Info Section */}
+                     <div className="saved-word-info">
+                        {mode === 'saved' ? (
+                            // Saved Mode: Static Text + Mastery
+                            <>
+                                <span className="saved-word-text">{word}</span>
+                                {renderMasteryDots(word)}
+                            </>
+                        ) : (
+                            // History Mode: Clickable Button
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onClose(); onSelect(word); }} 
+                                className="word-button"
+                            >
+                                {word}
+                            </button>
+                        )}
                      </div>
                      
-                     {/* History Mode: Show Star and Delete Button */}
-                     {mode === 'history' && (
-                        <div style={{display: 'flex', alignItems: 'center'}}>
-                            <button 
-                                className={`star-btn-list ${isSaved(word) ? 'active' : ''}`}
-                                onClick={(e) => { e.stopPropagation(); onToggleSave(word); }}
-                                title={isSaved(word) ? 'Remove from Saved' : 'Save Word'}
-                            >
-                                {isSaved(word) ? '★' : '☆'}
-                            </button>
-                            <button
-                                className="delete-history-btn"
-                                onClick={(e) => handleRemoveClick(e, word)}
-                                title="Remove from history"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                     )}
+                     {/* Actions Section */}
+                     <div className="saved-item-actions">
+                        {mode === 'saved' ? (
+                            // Show icons ONLY if active
+                            activeWord === word && (
+                                <>
+                                    <button 
+                                        className="action-btn" 
+                                        onClick={(e) => { e.stopPropagation(); onClose(); onSelect(word); }}
+                                        title="Open Wiki"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                                    </button>
+                                    <button 
+                                        className="action-btn" 
+                                        onClick={(e) => { e.stopPropagation(); handleEditClick(word); }}
+                                        title="Edit"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                    </button>
+                                    <button 
+                                        className="action-btn delete" 
+                                        onClick={(e) => handleRemoveClick(e, word)}
+                                        title="Delete"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                    </button>
+                                </>
+                            )
+                        ) : (
+                            // History Mode Actions: Always Visible
+                             <>
+                                <button 
+                                    className={`action-btn ${isSaved(word) ? 'active-star' : ''}`}
+                                    onClick={(e) => { e.stopPropagation(); onToggleSave(word); }}
+                                    title={isSaved(word) ? 'Remove from Saved' : 'Save Word'}
+                                >
+                                    {isSaved(word) ? '★' : '☆'}
+                                </button>
+                                <button
+                                    className="action-btn delete"
+                                    onClick={(e) => handleRemoveClick(e, word)}
+                                    title="Remove from history"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                            </>
+                        )}
+                     </div>
                   </div>
                 )}
               </li>

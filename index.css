@@ -1,4 +1,7 @@
 
+
+
+
 :root {
   /* Light Theme Variables */
   --bg-color: #ffffff;
@@ -375,18 +378,21 @@ button {
     transform: scale(1.1);
 }
 
-.save-toggle-button {
-    font-size: 0.8rem;
-    padding: 0.2rem 0.6rem;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    color: var(--text-color-secondary);
-    transition: all 0.2s;
+.save-star-btn {
+    font-size: 1.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color-muted);
+    padding: 0.2rem;
+    transition: transform 0.2s, color 0.2s;
+    line-height: 1;
 }
-.save-toggle-button.saved {
-    background-color: var(--text-color);
-    color: var(--bg-color);
-    border-color: var(--text-color);
+.save-star-btn:hover {
+    transform: scale(1.1);
+}
+.save-star-btn.saved {
+    color: var(--gold-color);
 }
 
 /* Saved Words Overlay */
@@ -493,18 +499,85 @@ button {
 .saved-word-item {
     padding: 0.8rem 0;
     border-bottom: 1px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+}
+
+.saved-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.4rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  min-height: 2.5rem;
+}
+
+.saved-item-row.clickable-row {
+    cursor: pointer;
+}
+.saved-item-row.clickable-row:hover {
+    background-color: var(--bg-color-secondary);
+}
+
+.saved-word-info {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: 4px;
+}
+
+.saved-word-text {
+  font-size: 1.1rem;
+  color: var(--text-color);
+  user-select: none;
+}
+
+.saved-item-actions {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color-secondary);
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.action-btn:hover {
+  color: var(--text-color);
+  background-color: var(--highlight-color);
+}
+
+.action-btn.delete:hover {
+  color: var(--error-color);
+  background-color: rgba(229, 57, 53, 0.1);
+}
+
+.action-btn.active-star {
+    color: var(--gold-color);
 }
 
 .word-button {
     text-align: left;
     font-size: 1.1rem;
     flex-grow: 1;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text-color);
+    cursor: pointer;
 }
 .word-button:hover {
     color: var(--accent-color);
+    text-decoration: underline;
 }
 
 .edit-mode-container {
@@ -522,18 +595,11 @@ button {
     background-color: var(--input-bg);
     color: var(--text-color);
 }
-.delete-btn-edit-mode {
-    background-color: var(--error-color);
-    color: #fff;
-    border-radius: 4px;
-    padding: 0.3rem 0.6rem;
-    font-size: 0.8rem;
-}
 
 .mastery-indicator {
     display: flex;
     gap: 3px;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 .mastery-dot {
     width: 6px;
@@ -565,24 +631,6 @@ button {
 }
 .undo-btn {
     font-weight: bold;
-    color: var(--gold-color);
-}
-
-.delete-history-btn {
-    color: var(--text-color-muted);
-    font-size: 1rem;
-    padding: 0.5rem;
-    margin-left: 0.5rem;
-}
-.delete-history-btn:hover {
-    color: var(--error-color);
-}
-.star-btn-list {
-    color: var(--text-color-muted);
-    font-size: 1.2rem;
-    padding: 0.2rem;
-}
-.star-btn-list.active {
     color: var(--gold-color);
 }
 
@@ -1179,7 +1227,7 @@ button {
     font-size: 1.2rem;
     line-height: 1.8;
     white-space: pre-wrap;
-    text-align: justify;
+    text-align: left;
 }
 
 .story-word {

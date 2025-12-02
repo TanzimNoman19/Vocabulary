@@ -1,11 +1,10 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { streamDefinition, generateAsciiArt, AsciiArtData } from './services/geminiService';
+import { streamDefinition, generateAsciiArt, AsciiArtData, getRandomWord } from './services/geminiService';
 import { SRSItem, Grade, calculateSRS, initializeSRSItem } from './services/srsService';
 import { supabase, saveUserData, getUserData } from './services/supabaseClient';
 import ContentDisplay from './components/ContentDisplay';
@@ -18,7 +17,7 @@ import FlashcardView from './components/FlashcardView';
 import AuthModal from './components/AuthModal';
 import StoryView, { StoryState } from './components/StoryView';
 
-// Curated sophisticated words for the random button
+// Curated sophisticated words for the random button fallback
 const SOPHISTICATED_WORDS = [
   'Ephemeral', 'Serendipity', 'Obfuscate', 'Cacophony', 'Mellifluous', 'Labyrinthine', 'Quixotic', 'Ineffable', 'Petrichor', 'Sonder', 'Vellichor', 'Opia', 'Eccedentesiast', 'Phosphenes', 'Defenestration', 'Sycophant', 'Ubiquitous', 'Machiavellian', 'Narcissist', 'Stoic', 'Altruism', 'Pragmatic', 'Esoteric', 'Nefarious', 'Pernicious', 'Alacrity', 'Proclivity', 'Propensity', 'Penchant', 'Predilection', 'Anachronism', 'Iconoclast', 'Demagogue', 'Epiphany', 'Euphemism', 'Hyperbole', 'Metaphor', 'Oxymoron', 'Paradox', 'Rhetoric', 'Satire', 'Syntax', 'Vernacular', 'Zephyr', 'Zenith', 'Nadir', 'Apex', 'Apogee', 'Perigee'
 ];
@@ -365,19 +364,26 @@ const App: React.FC = () => {
     navigateTo(topic);
   }, [navigateTo]);
 
-  const handleRandom = useCallback(() => {
+  const handleRandom = useCallback(async () => {
     if (isLoading) return;
 
-    const randomIndex = Math.floor(Math.random() * SOPHISTICATED_WORDS.length);
-    const randomWord = SOPHISTICATED_WORDS[randomIndex];
-
-    if (randomWord.toLowerCase() === currentTopic.toLowerCase()) {
-      const nextIndex = (randomIndex + 1) % SOPHISTICATED_WORDS.length;
-      navigateTo(SOPHISTICATED_WORDS[nextIndex]);
-    } else {
-      navigateTo(randomWord);
+    // Use AI generation for true randomness (consistent with Flashcards)
+    // Fallback to local list if needed
+    try {
+        // We set a temporary loading state by calling getRandomWord first
+        // Note: We don't want to set global isLoading to true immediately because 
+        // that triggers the skeleton on the home page which might look glitchy if it fails fast.
+        // But navigateTo will trigger the real loading state.
+        
+        const randomWord = await getRandomWord();
+        navigateTo(randomWord);
+    } catch (error) {
+        console.error("AI Random failed, using local backup", error);
+        const randomIndex = Math.floor(Math.random() * SOPHISTICATED_WORDS.length);
+        const randomWord = SOPHISTICATED_WORDS[randomIndex];
+        navigateTo(randomWord);
     }
-  }, [currentTopic, navigateTo, isLoading]);
+  }, [navigateTo, isLoading]);
 
   // Generic toggle save function
   const handleToggleSave = useCallback((word: string) => {
@@ -617,11 +623,12 @@ const App: React.FC = () => {
                 </h2>
                 <button 
                   onClick={toggleSaveCurrentWord}
-                  className={`save-toggle-button ${isCurrentWordSaved ? 'saved' : ''}`}
+                  className={`save-star-btn ${isCurrentWordSaved ? 'saved' : ''}`}
                   aria-label={isCurrentWordSaved ? 'Remove from saved words' : 'Save word'}
                   disabled={isLoading}
+                  title={isCurrentWordSaved ? 'Remove from saved words' : 'Save word'}
                 >
-                  {isCurrentWordSaved ? 'Saved' : 'Save'}
+                  {isCurrentWordSaved ? '★' : '☆'}
                 </button>
               </div>
 
