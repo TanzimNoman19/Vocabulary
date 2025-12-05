@@ -276,6 +276,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                   <div 
                     className={`saved-item-row ${mode === 'saved' ? 'clickable-row' : ''}`}
                     onClick={() => mode === 'saved' && setActiveWord(activeWord === word ? null : word)}
+                    onContextMenu={(e) => e.preventDefault()}
                   >
                      {/* Word Info Section */}
                      <div className="saved-word-info">

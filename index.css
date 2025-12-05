@@ -1,7 +1,3 @@
-
-
-
-
 :root {
   /* Light Theme Variables */
   --bg-color: #ffffff;
@@ -90,12 +86,14 @@
 body {
   background-color: var(--bg-color);
   color: var(--text-color);
-  font-family: 'Kosugi', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   font-size: 1.1rem;
   line-height: 1.6;
   margin: 0;
   padding: 2rem;
   transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 #root {
   max-width: 65ch;
@@ -106,7 +104,7 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-size: 1em;
   margin: 0;
-  font-weight: normal;
+  font-weight: 600;
 }
 button {
   background: none;
@@ -272,7 +270,7 @@ button {
   letter-spacing: 0.1em;
   color: var(--text-color-muted);
   margin-bottom: 0.5rem;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .wiki-section-body p {
@@ -323,6 +321,7 @@ button {
     text-transform: uppercase;
     text-align: center;
     margin-bottom: 1rem;
+    font-weight: 600;
 }
 
 .home-buttons {
@@ -344,6 +343,7 @@ button {
     transition: all 0.2s ease;
     text-transform: uppercase;
     box-shadow: 0 2px 5px var(--shadow-color);
+    font-weight: 500;
 }
 
 .home-btn:hover {
@@ -435,6 +435,7 @@ button {
     text-transform: uppercase;
     letter-spacing: 0.1em;
     font-size: 1.1rem;
+    font-weight: 600;
 }
 
 .close-button {
@@ -485,7 +486,7 @@ button {
 .sort-btn.active {
     color: var(--text-color);
     border-color: var(--border-color);
-    font-weight: bold;
+    font-weight: 600;
 }
 
 .saved-words-ul {
@@ -510,6 +511,8 @@ button {
   border-radius: 4px;
   transition: background-color 0.2s;
   min-height: 2.5rem;
+  user-select: none; /* Prevent text selection on long press */
+  -webkit-user-select: none;
 }
 
 .saved-item-row.clickable-row {
@@ -529,7 +532,7 @@ button {
 .saved-word-text {
   font-size: 1.1rem;
   color: var(--text-color);
-  user-select: none;
+  font-weight: 500;
 }
 
 .saved-item-actions {

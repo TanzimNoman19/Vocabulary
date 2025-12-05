@@ -157,7 +157,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({ onClose, savedWords, srsD
     }
   };
 
-  const loadWord = async (word: string) => {
+  const loadWord = async (word: string, autoReveal: boolean = false) => {
     activeWordRef.current = word; // Track active request to prevent race conditions
     setCurrentWord(word);
     setIsFlipped(false);
@@ -192,6 +192,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({ onClose, savedWords, srsD
     } finally {
       if (activeWordRef.current === word) {
         setIsLoading(false);
+        if (autoReveal) {
+          setIsFlipped(true);
+        }
       }
     }
   };
@@ -269,7 +272,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({ onClose, savedWords, srsD
     if (currentWord) {
       setHistory(prev => [...prev, currentWord]);
     }
-    loadWord(word);
+    loadWord(word, true);
   };
 
   const handleGrade = (grade: Grade) => {
