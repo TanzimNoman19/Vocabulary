@@ -370,6 +370,11 @@ const App: React.FC = () => {
     // Use AI generation for true randomness (consistent with Flashcards)
     // Fallback to local list if needed
     try {
+        // We set a temporary loading state by calling getRandomWord first
+        // Note: We don't want to set global isLoading to true immediately because 
+        // that triggers the skeleton on the home page which might look glitchy if it fails fast.
+        // But navigateTo will trigger the real loading state.
+        
         const randomWord = await getRandomWord();
         navigateTo(randomWord);
     } catch (error) {
@@ -486,33 +491,6 @@ const App: React.FC = () => {
     setIsSavedListOpen(true);
   };
 
-  // Notification Logic
-  const handleRequestNotification = useCallback(async () => {
-    if (!('Notification' in window)) {
-      alert("This browser does not support notifications.");
-      return;
-    }
-
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-       // Send immediate test notification
-       try {
-         const registration = await navigator.serviceWorker.ready;
-         registration.showNotification('Infinite Vocabulary', {
-           body: 'Notifications enabled! You will now receive daily word reminders.',
-           icon: '/vite.svg', // Uses the standard icon
-           vibrate: [200, 100, 200]
-         } as any);
-       } catch (e) {
-         // Fallback for non-PWA/Dev mode
-         new Notification('Infinite Vocabulary', {
-           body: 'Notifications enabled! You will now receive daily word reminders.',
-           icon: '/vite.svg'
-         });
-       }
-    }
-  }, []);
-
   const isCurrentWordSaved = savedWords.some(w => w.toLowerCase() === currentTopic.toLowerCase());
   
   const isHomeView = !currentTopic;
@@ -535,7 +513,6 @@ const App: React.FC = () => {
         savedWords={savedWords}
         onOpenAuth={() => setIsAuthOpen(true)}
         userDisplayName={userDisplayName}
-        onRequestNotification={handleRequestNotification}
       />
 
       {isAuthOpen && (
