@@ -15,7 +15,9 @@ export default defineConfig(({ mode }) => {
         manifest: {
           name: 'Infinite Vocabulary',
           short_name: 'InfVocab',
-          description: 'Expand your vocabulary with AI.',
+          description: 'Expand your vocabulary with AI-generated definitions and stories.',
+          lang: 'en',
+          categories: ['education', 'productivity', 'utilities'],
           theme_color: '#ffffff',
           background_color: '#ffffff',
           display: 'standalone',
@@ -24,16 +26,32 @@ export default defineConfig(({ mode }) => {
           orientation: 'portrait',
           icons: [
             {
-              src: '/vite.svg', // Fallback to existing SVG to ensure build success
+              src: '/vite.svg',
               sizes: '192x192',
               type: 'image/svg+xml',
-              purpose: 'any maskable'
+              purpose: 'any'
             },
             {
               src: '/vite.svg',
               sizes: '512x512',
               type: 'image/svg+xml',
-              purpose: 'any maskable'
+              purpose: 'any'
+            }
+          ],
+          shortcuts: [
+            {
+              name: "Story Mode",
+              short_name: "Story",
+              description: "Start a vocabulary story",
+              url: "/?mode=story",
+              icons: [{ src: "/vite.svg", sizes: "192x192", type: "image/svg+xml" }]
+            },
+            {
+              name: "Saved Words",
+              short_name: "Saved",
+              description: "View your collection",
+              url: "/?mode=saved",
+              icons: [{ src: "/vite.svg", sizes: "192x192", type: "image/svg+xml" }]
             }
           ]
         },
@@ -43,10 +61,8 @@ export default defineConfig(({ mode }) => {
       })
     ],
     define: {
-      // Polyfill process.env so usage of process.env.API_KEY works in the browser.
-      'process.env': JSON.stringify({
-        API_KEY: env.API_KEY || "" 
-      })
+      // Safely define API_KEY without overwriting the entire process.env object
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || "")
     }
   };
 });
