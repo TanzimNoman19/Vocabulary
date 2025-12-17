@@ -21,7 +21,8 @@ const getAiClient = () => {
   return ai;
 };
 
-const textModelName = 'gemini-2.5-flash-lite';
+// Use standard flash model as default
+const textModelName = 'gemini-2.5-flash';
 const chatModelName = 'gemini-2.5-flash';
 
 export interface CardData {
@@ -36,22 +37,23 @@ export interface CardData {
   difficulty: string;
 }
 
-// Helper to detect quota errors
+// Robust Quota Error Check
 const isQuotaError = (error: any): boolean => {
   if (!error) return false;
+  // Check typical GoogleGenAI error structure
+  if (error.status === 429 || error.code === 429) return true;
+  if (error.status === 'RESOURCE_EXHAUSTED') return true;
+  
+  const msg = error.message || '';
+  if (msg.includes('429') || msg.includes('Quota') || msg.includes('RESOURCE_EXHAUSTED')) return true;
+
+  // Check nested error object if present (JSON response)
   try {
      const str = JSON.stringify(error);
      if (str.includes('429') || str.includes('RESOURCE_EXHAUSTED') || str.includes('Quota exceeded')) return true;
   } catch(e) {}
   
-  const msg = error?.message || '';
-  const status = error?.status || '';
-  const code = error?.code || '';
-  
-  return msg.includes('429') || 
-         msg.includes('RESOURCE_EXHAUSTED') || 
-         status === 'RESOURCE_EXHAUSTED' ||
-         code === 429;
+  return false;
 };
 
 export interface AsciiArtData {
@@ -120,6 +122,39 @@ export const createChatSession = () => {
 };
 
 /**
+ * Searches for vocabulary words starting with the query string using Gemini.
+ */
+export async function searchVocabulary(query: string): Promise<string[]> {
+  if (!process.env.API_KEY || query.length < 2) return [];
+  
+  const prompt = `List up to 6 English vocabulary words that start with "${query}". 
+  Return ONLY a JSON array of strings (e.g. ["Word1", "Word2"]). 
+  Do not explain.`;
+  
+  try {
+    const response = await getAiClient().models.generateContent({
+      model: textModelName,
+      contents: prompt,
+      config: { 
+        responseMimeType: 'application/json',
+        temperature: 0.3 
+      }
+    });
+    
+    const text = response.text;
+    if (!text) return [];
+    
+    return JSON.parse(text) as string[];
+  } catch (error) {
+    // Silent fail on quota for search suggestions
+    if (!isQuotaError(error)) {
+        console.error("Search error", error);
+    }
+    return [];
+  }
+}
+
+/**
  * Streams a definition for a given topic from the Gemini API.
  */
 export async function* streamDefinition(
@@ -160,19 +195,22 @@ export async function* streamDefinition(
       }
     }
   } catch (error: any) {
-    console.error('Error streaming:', error);
     if (isQuotaError(error)) {
-        yield `POS: noun
-IPA: /429/
-DEFINITION: Service unavailable due to quota.
-BENGALI: কোটা অতিক্রান্ত
-WORD FAMILY: N/A
-CONTEXT: N/A
-SYNONYMS: N/A
-ANTONYMS: N/A
-DIFFICULTY: Error`;
+        // Log warning instead of error to reduce noise
+        console.warn('Quota exceeded in streamDefinition.');
+        // Yield a fallback card
+        yield `POS: system
+IPA: /quota/
+DEFINITION: The AI is taking a short break due to high traffic. Please try again in a moment.
+BENGALI: সাময়িক বিরতি
+WORD FAMILY: Patience (noun)
+CONTEXT: Systems sometimes need a moment to recharge, just like us.
+SYNONYMS: Wait, Pause
+ANTONYMS: Rush
+DIFFICULTY: Temporary`;
         return;
     }
+    console.error('Error streaming:', error);
     yield `Error: ${error.message}`;
   }
 }
@@ -183,6 +221,7 @@ DIFFICULTY: Error`;
  */
 export async function fetchFullDefinition(topic: string): Promise<string> {
   let fullText = '';
+  // This loop consumes the generator
   for await (const chunk of streamDefinition(topic)) {
     fullText += chunk;
   }
@@ -231,6 +270,7 @@ export async function getRandomWord(): Promise<string> {
     });
     return response.text.trim();
   } catch (error) {
+    // Silently fall back to dictionary on error
     const randomIndex = Math.floor(Math.random() * DICTIONARY_WORDS.length);
     return DICTIONARY_WORDS[randomIndex];
   }
@@ -299,11 +339,13 @@ export async function generateStorySegment(promptContext: string, previousText: 
     });
     return response.text.trim();
   } catch (error) {
+    if (isQuotaError(error)) {
+        return "Story generation paused due to high traffic. Please try again in a minute.";
+    }
     return "Story generation unavailable.";
   }
 }
 
 export async function generateAsciiArt(topic: string): Promise<AsciiArtData> {
-  // Minimal stub implementation for legacy support if needed
   return { art: `[ASCII Art for ${topic}]` };
 }

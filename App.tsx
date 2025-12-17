@@ -195,7 +195,7 @@ const App: React.FC = () => {
 
   // --- Render ---
   return (
-    <div className="app-container">
+    <div className="app-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 1. Header */}
       <header className="app-header">
         <div className="logo-text">LexiFlow</div>
@@ -252,7 +252,9 @@ const App: React.FC = () => {
         )}
         
         {activeTab === 'search' && (
-            <SearchBar onSearch={handleSearch} savedWords={savedWords} />
+            <div className="search-view">
+                <SearchBar onSearch={handleSearch} savedWords={savedWords} />
+            </div>
         )}
 
         {activeTab === 'profile' && (
