@@ -131,6 +131,7 @@ export async function* streamDefinition(
   CONTEXT: [One illustrative sentence using the word]
   SYNONYMS: [Comma separated list]
   ANTONYMS: [Comma separated list or N/A]
+  DIFFICULTY: [One word rating: Basic, Intermediate, Advanced, SAT, GRE, or Rare]
   
   Do not add markdown bolding like **. Just raw text after headers.`;
 
@@ -156,7 +157,8 @@ BENGALI: কোটা অতিক্রান্ত
 WORD FAMILY: N/A
 CONTEXT: N/A
 SYNONYMS: N/A
-ANTONYMS: N/A`;
+ANTONYMS: N/A
+DIFFICULTY: Error`;
         return;
     }
     yield `Error: ${error.message}`;

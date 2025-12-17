@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState } from 'react';
+import { DICTIONARY_WORDS } from '../services/dictionaryData';
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
@@ -17,9 +18,28 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
     if (query.trim()) onSearch(query.trim());
   };
 
-  const suggestions = query 
-    ? savedWords.filter(w => w.toLowerCase().startsWith(query.toLowerCase())).slice(0, 5) 
-    : [];
+  // Combine saved words and dictionary words, de-duplicate, and filter
+  const getSuggestions = () => {
+    if (!query) return [];
+    
+    const lowerQuery = query.toLowerCase();
+    
+    // Create a Set of saved words for quick lookup
+    const savedSet = new Set(savedWords.map(w => w.toLowerCase()));
+    
+    // Filter dictionary words that start with query and are NOT in saved list
+    const dictMatches = DICTIONARY_WORDS.filter(
+        w => w.toLowerCase().startsWith(lowerQuery) && !savedSet.has(w.toLowerCase())
+    );
+
+    // Filter saved words that start with query
+    const savedMatches = savedWords.filter(w => w.toLowerCase().startsWith(lowerQuery));
+
+    // Combine: Saved matches first, then dictionary matches. Limit to 8 total.
+    return [...savedMatches, ...dictMatches].slice(0, 8);
+  };
+
+  const suggestions = getSuggestions();
 
   return (
     <div style={{ padding: '2rem 1rem' }}>
@@ -32,7 +52,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
                     className="search-page-input"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search or add word..."
+                    placeholder="Search dictionary..."
                     autoFocus
                     style={{ paddingLeft: '2.5rem' }}
                 />
@@ -40,11 +60,32 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
         </form>
 
         <ul style={{ listStyle: 'none', padding: 0, marginTop: '2rem' }}>
-            {suggestions.map(word => (
-                <li key={word} style={{ padding: '1rem 0', borderBottom: '1px solid var(--border-color)', fontSize: '1.1rem', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => onSearch(word)}>
-                    {word}
-                </li>
-            ))}
+            {suggestions.map((word, index) => {
+                const isSaved = savedWords.some(w => w.toLowerCase() === word.toLowerCase());
+                return (
+                    <li 
+                        key={`${word}-${index}`} 
+                        style={{ 
+                            padding: '1rem 0', 
+                            borderBottom: '1px solid var(--border-color)', 
+                            fontSize: '1.1rem', 
+                            color: 'var(--text-primary)', 
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }} 
+                        onClick={() => onSearch(word)}
+                    >
+                        <span>{word}</span>
+                        {isSaved && (
+                            <span style={{ fontSize: '0.7rem', background: 'var(--accent-secondary)', color: 'var(--accent-primary)', padding: '2px 6px', borderRadius: '4px' }}>
+                                SAVED
+                            </span>
+                        )}
+                    </li>
+                );
+            })}
         </ul>
     </div>
   );

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect, useRef } from 'react';
-import { streamDefinition, generateUsageExample } from '../services/geminiService';
+import { streamDefinition, generateUsageExample, getRandomWord } from '../services/geminiService';
 import { Grade } from '../services/srsService';
 
 interface FlashcardViewProps {
@@ -24,6 +24,7 @@ interface CardData {
   context: string;
   synonyms: string;
   antonyms: string;
+  difficulty: string;
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({ 
@@ -31,7 +32,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [data, setData] = useState<CardData>({
-    pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: ''
+    pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const activeTopic = useRef(topic);
@@ -44,7 +45,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     activeTopic.current = word;
     setIsFlipped(false);
     setIsLoading(true);
-    setData({ pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '' });
+    setData({ pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: '' });
     
     try {
       let fullText = '';
@@ -64,7 +65,8 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
   const parseData = (text: string) => {
     const extract = (key: string) => {
-      const regex = new RegExp(`${key}:\\s*(.*?)(?=\\n[A-Z]+:|$)`, 's');
+      // Modified Regex to allow spaces in headers (e.g., WORD FAMILY)
+      const regex = new RegExp(`${key}:\\s*(.*?)(?=\\n[A-Z ]+:|$)`, 's');
       const match = text.match(regex);
       return match ? match[1].trim() : '';
     };
@@ -77,7 +79,8 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
       family: extract('WORD FAMILY'),
       context: extract('CONTEXT'),
       synonyms: extract('SYNONYMS'),
-      antonyms: extract('ANTONYMS')
+      antonyms: extract('ANTONYMS'),
+      difficulty: extract('DIFFICULTY')
     });
   };
 
@@ -85,6 +88,23 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     e.stopPropagation();
     const newContext = await generateUsageExample(topic);
     setData(prev => ({ ...prev, context: newContext }));
+  };
+  
+  const handleSkip = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+        const nextWord = await getRandomWord();
+        onNavigate(nextWord);
+    } catch (e) {
+        onNavigate('Serendipity');
+    }
+  };
+
+  const handleKnow = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onUpdateSRS(topic, 'know');
+      // No need to manually navigate here if onUpdateSRS handles fetching the next word
+      // But based on App.tsx, onUpdateSRS calls handleRandom() which updates currentTopic
   };
 
   const isSaved = savedWords.includes(topic);
@@ -98,6 +118,15 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     const utterance = new SpeechSynthesisUtterance(topic);
     window.speechSynthesis.speak(utterance);
   };
+
+  // Process synonyms and antonyms into arrays
+  const synonymsList = data.synonyms && data.synonyms !== 'N/A' 
+    ? data.synonyms.split(',').map(s => s.trim()).filter(s => s && s.toLowerCase() !== 'n/a') 
+    : [];
+  
+  const antonymsList = data.antonyms && data.antonyms !== 'N/A' 
+    ? data.antonyms.split(',').map(s => s.trim()).filter(s => s && s.toLowerCase() !== 'n/a') 
+    : [];
 
   return (
     <div className="flashcard-container">
@@ -114,22 +143,34 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
            <div className="word-display">{topic}</div>
            <div className="pos-tag">{data.pos || '...'}</div>
-           <div className="status-badge">{badgeText}</div>
+           
+           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div className="status-badge">{badgeText}</div>
+                {data.difficulty && (
+                    <div className="status-badge" style={{ 
+                        background: 'transparent', 
+                        color: 'var(--text-secondary)', 
+                        border: '1px solid var(--border-color)',
+                        boxShadow: 'none' 
+                    }}>
+                        {data.difficulty}
+                    </div>
+                )}
+           </div>
            
            <div className="tap-hint">Tap to flip</div>
         </div>
 
-        {/* Back Face */}
+        {/* Back Face - Structured with Fixed Header/Footer */}
         <div className="card-face card-back">
-           <div className="back-header">
-             <div>
+           
+           {/* Fixed Header: Word, IPA, Save */}
+           <div className="card-back-header">
+             <div style={{ display: 'flex', alignItems: 'center' }}>
                <h2 className="word-small">{topic}</h2>
-               <div className="ipa-text">
-                  {data.ipa} 
-                  <button onClick={speak} style={{ marginLeft: '8px', verticalAlign: 'middle', opacity: 0.7 }}>
-                     🔊
-                  </button>
-               </div>
+               <button onClick={speak} style={{ marginLeft: '10px', opacity: 0.7, border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                  🔊
+               </button>
              </div>
              <button 
                 className={`like-btn ${isSaved ? 'liked' : ''}`} 
@@ -140,44 +181,82 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
              </button>
            </div>
 
-           <div className="section-label">DEFINITION</div>
-           <div className="def-text">{data.definition || <span className="loading-dots">Loading</span>}</div>
-           <div className="def-sub">{data.bengali}</div>
+           {/* Scrollable Content: Definitions, Context */}
+           <div className="card-back-scrollable">
+                <div className="section-label">DEFINITION</div>
+                <div className="def-text">
+                    {data.definition || <span className="loading-dots">Loading</span>}
+                    {data.bengali && <span className="bengali-def">[{data.bengali}]</span>}
+                </div>
 
-           {data.family && data.family !== 'N/A' && (
-             <>
-                <div className="section-label">WORD FAMILY</div>
-                <div className="def-sub">{data.family}</div>
-             </>
-           )}
+                {data.family && data.family !== 'N/A' && (
+                    <>
+                        <div className="section-label">WORD FAMILY</div>
+                        <div className="def-sub">{data.family}</div>
+                    </>
+                )}
 
-           <div className="section-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-              CONTEXT 
-              <button onClick={handleRefreshContext} style={{ color: 'var(--accent-primary)' }}>↻</button>
+                <div className="section-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    CONTEXT 
+                    <button onClick={handleRefreshContext} style={{ color: 'var(--accent-primary)' }}>↻</button>
+                </div>
+                <div className="context-box">
+                    "{data.context || '...'}"
+                </div>
+
+                {/* Synonyms & Antonyms Section */}
+                {(synonymsList.length > 0 || antonymsList.length > 0) && (
+                    <div className="synonyms-antonyms-container">
+                        {synonymsList.length > 0 && (
+                            <div className="sa-column">
+                                <div className="section-label">SYNONYMS</div>
+                                <div className="chip-container">
+                                    {synonymsList.map((word, i) => (
+                                        <span key={i} className="chip" onClick={(e) => { e.stopPropagation(); onNavigate(word); }}>{word}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {antonymsList.length > 0 && (
+                            <div className="sa-column">
+                                <div className="section-label">ANTONYMS</div>
+                                <div className="chip-container">
+                                    {antonymsList.map((word, i) => (
+                                        <span key={i} className="chip" onClick={(e) => { e.stopPropagation(); onNavigate(word); }}>{word}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
            </div>
-           <div className="context-box">
-             "{data.context || '...'}"
+
+           {/* Fixed Footer: Only Review Again button remaining inside card back */}
+           <div className="card-back-footer">
+               <div className="srs-actions">
+                  <button className="action-btn btn-again" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'dont_know'); }}>
+                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                     Review Again
+                  </button>
+               </div>
            </div>
 
-           {(data.synonyms || data.antonyms) && (
-              <div style={{ marginTop: '1rem' }}>
-                <span className="section-label">SYNONYMS: </span>
-                <span className="def-sub">{data.synonyms}</span>
-              </div>
-           )}
-
-           <div className="srs-actions">
-              <button className="action-btn btn-again" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'dont_know'); }}>
-                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                 Again
-              </button>
-              <button className="action-btn btn-got-it" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'know'); }}>
-                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                 Got it
-              </button>
-           </div>
         </div>
       </div>
+      
+      {/* External Action Buttons (Always Visible) */}
+      <div className="external-actions">
+          <button className="skip-action-btn know-btn" onClick={handleKnow}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>I Know</span>
+          </button>
+          
+          <button className="skip-action-btn next-btn" onClick={handleSkip}>
+            <span>Next Word</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+      </div>
+
     </div>
   );
 };
