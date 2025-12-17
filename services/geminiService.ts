@@ -24,6 +24,18 @@ const getAiClient = () => {
 const textModelName = 'gemini-2.5-flash-lite';
 const chatModelName = 'gemini-2.5-flash';
 
+export interface CardData {
+  pos: string;
+  ipa: string;
+  definition: string;
+  bengali: string;
+  family: string;
+  context: string;
+  synonyms: string;
+  antonyms: string;
+  difficulty: string;
+}
+
 // Helper to detect quota errors
 const isQuotaError = (error: any): boolean => {
   if (!error) return false;
@@ -163,6 +175,42 @@ DIFFICULTY: Error`;
     }
     yield `Error: ${error.message}`;
   }
+}
+
+/**
+ * Helper to fetch full definition string without streaming logic exposed.
+ * Useful for background pre-fetching.
+ */
+export async function fetchFullDefinition(topic: string): Promise<string> {
+  let fullText = '';
+  for await (const chunk of streamDefinition(topic)) {
+    fullText += chunk;
+  }
+  return fullText;
+}
+
+/**
+ * Parses the raw text response from Gemini into a structured CardData object.
+ */
+export function parseFlashcardResponse(text: string): CardData {
+  const extract = (key: string) => {
+    // Modified Regex to allow spaces in headers (e.g., WORD FAMILY)
+    const regex = new RegExp(`${key}:\\s*(.*?)(?=\\n[A-Z ]+:|$)`, 's');
+    const match = text.match(regex);
+    return match ? match[1].trim() : '';
+  };
+
+  return {
+    pos: extract('POS'),
+    ipa: extract('IPA'),
+    definition: extract('DEFINITION'),
+    bengali: extract('BENGALI'),
+    family: extract('WORD FAMILY'),
+    context: extract('CONTEXT'),
+    synonyms: extract('SYNONYMS'),
+    antonyms: extract('ANTONYMS'),
+    difficulty: extract('DIFFICULTY')
+  };
 }
 
 export async function getRandomWord(): Promise<string> {

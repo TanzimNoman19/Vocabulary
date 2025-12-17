@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { getRandomWord } from './services/geminiService';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getRandomWord, CardData, fetchFullDefinition, parseFlashcardResponse } from './services/geminiService';
 import { SRSItem, calculateSRS, initializeSRSItem } from './services/srsService';
 import { supabase, saveUserData, getUserData } from './services/supabaseClient';
 import FlashcardView from './components/FlashcardView';
@@ -35,6 +35,16 @@ const App: React.FC = () => {
     return data ? JSON.parse(data) : {};
   });
 
+  // Card Cache State (Full Flashcard Data)
+  const [cardCache, setCardCache] = useState<Record<string, CardData>>(() => {
+    const cache = localStorage.getItem('cardCache');
+    return cache ? JSON.parse(cache) : {};
+  });
+
+  // Background Fetching Queue
+  const [wordQueue, setWordQueue] = useState<string[]>([]);
+  const isFetchingRef = useRef(false);
+
   // UI State
   const [isDiscoveryOpen, setIsDiscoveryOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -48,9 +58,46 @@ const App: React.FC = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Initial Random Word
   useEffect(() => {
     if (!currentTopic) handleRandom();
   }, []);
+
+  // Background Pre-fetching Effect
+  useEffect(() => {
+    const replenishQueue = async () => {
+        // Maintain a small buffer of 2 words
+        if (wordQueue.length < 2 && !isFetchingRef.current) {
+            isFetchingRef.current = true;
+            try {
+                const nextWord = await getRandomWord();
+                
+                // If we already have it in cache or it's already in queue, skip generating
+                if (cardCache[nextWord] || wordQueue.includes(nextWord)) {
+                   if (!wordQueue.includes(nextWord)) {
+                       setWordQueue(prev => [...prev, nextWord]);
+                   }
+                } else {
+                   // Generate data in background
+                   const fullText = await fetchFullDefinition(nextWord);
+                   const parsedData = parseFlashcardResponse(fullText);
+                   
+                   // Update Cache and Queue
+                   setCardCache(prev => ({ ...prev, [nextWord]: parsedData }));
+                   setWordQueue(prev => [...prev, nextWord]);
+                }
+            } catch (e) {
+                console.error("Background fetch failed", e);
+            } finally {
+                isFetchingRef.current = false;
+            }
+        }
+    };
+
+    // Check periodically or when queue changes
+    const timer = setTimeout(replenishQueue, 1000);
+    return () => clearTimeout(timer);
+  }, [wordQueue, cardCache]);
 
   // Sync with Supabase
   useEffect(() => {
@@ -65,27 +112,46 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Persistence (LocalStorage & Cloud)
   useEffect(() => {
     localStorage.setItem('savedWords', JSON.stringify(savedWords));
     localStorage.setItem('srsData', JSON.stringify(srsData));
-    if (user) saveUserData(user.id, { savedWords, srsData });
-  }, [savedWords, srsData, user]);
+    localStorage.setItem('cardCache', JSON.stringify(cardCache));
+    
+    if (user) {
+        // Note: For a production app, cardCache should be in a separate table 
+        // as user_data column size might grow too large.
+        saveUserData(user.id, { savedWords, srsData, cardCache });
+    }
+  }, [savedWords, srsData, cardCache, user]);
 
   const loadDataFromSupabase = async (userId: string) => {
     const cloudData = await getUserData(userId);
     if (cloudData) {
         setSavedWords(cloudData.savedWords || []);
         setSrsData(cloudData.srsData || {});
+        if (cloudData.cardCache) {
+            // Merge cloud cache with local cache to avoid overwriting recent updates
+            setCardCache(prev => ({ ...prev, ...cloudData.cardCache }));
+        }
     }
   };
 
   // --- Handlers ---
   const handleRandom = async () => {
-      try {
-          const word = await getRandomWord();
-          setCurrentTopic(word);
-      } catch (e) {
-          setCurrentTopic("Serendipity");
+      if (wordQueue.length > 0) {
+          // Use pre-fetched word
+          const next = wordQueue[0];
+          setWordQueue(prev => prev.slice(1));
+          setCurrentTopic(next);
+      } else {
+          // Fallback if queue empty
+          try {
+              const word = await getRandomWord();
+              setCurrentTopic(word);
+          } catch (e) {
+              setCurrentTopic("Serendipity");
+          }
       }
   };
 
@@ -117,8 +183,12 @@ const App: React.FC = () => {
           setSavedWords(prev => [word, ...prev]);
       }
       
-      // Fetch next word
+      // Fetch next word (using queue if available)
       handleRandom();
+  };
+
+  const handleUpdateCache = (word: string, data: CardData) => {
+      setCardCache(prev => ({ ...prev, [word]: data }));
   };
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
@@ -165,9 +235,11 @@ const App: React.FC = () => {
                 topic={currentTopic} 
                 savedWords={savedWords}
                 srsData={srsData}
+                cardCache={cardCache}
                 onUpdateSRS={handleSRSUpdate}
                 onToggleSave={handleToggleSave}
                 onNavigate={handleSearch}
+                onCacheUpdate={handleUpdateCache}
             />
         )}
         

@@ -3,32 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect, useRef } from 'react';
-import { streamDefinition, generateUsageExample, getRandomWord } from '../services/geminiService';
+import { streamDefinition, generateUsageExample, getRandomWord, CardData, parseFlashcardResponse } from '../services/geminiService';
 import { Grade } from '../services/srsService';
 
 interface FlashcardViewProps {
   topic: string;
   savedWords: string[];
   srsData: Record<string, any>;
+  cardCache: Record<string, CardData>;
   onUpdateSRS: (word: string, grade: Grade) => void;
   onToggleSave: (word: string) => void;
   onNavigate: (word: string) => void;
-}
-
-interface CardData {
-  pos: string;
-  ipa: string;
-  definition: string;
-  bengali: string;
-  family: string;
-  context: string;
-  synonyms: string;
-  antonyms: string;
-  difficulty: string;
+  onCacheUpdate: (word: string, data: CardData) => void;
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({ 
-    topic, savedWords, srsData, onUpdateSRS, onToggleSave, onNavigate 
+    topic, savedWords, srsData, cardCache, onUpdateSRS, onToggleSave, onNavigate, onCacheUpdate
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [data, setData] = useState<CardData>({
@@ -41,9 +31,18 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     if (topic) loadTopic(topic);
   }, [topic]);
 
-  const loadTopic = async (word: string) => {
+  const loadTopic = async (word: string, forceRefresh = false) => {
     activeTopic.current = word;
     setIsFlipped(false);
+
+    // Check Cache First
+    if (!forceRefresh && cardCache[word]) {
+        setData(cardCache[word]);
+        setIsLoading(false);
+        return;
+    }
+
+    // If not in cache or forced refresh, load from API
     setIsLoading(true);
     setData({ pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: '' });
     
@@ -54,8 +53,11 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
         fullText += chunk;
       }
       if (activeTopic.current === word) {
-        parseData(fullText);
+        const parsed = parseFlashcardResponse(fullText);
+        setData(parsed);
         setIsLoading(false);
+        // Save to cache
+        onCacheUpdate(word, parsed);
       }
     } catch (e) {
       console.error(e);
@@ -63,25 +65,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     }
   };
 
-  const parseData = (text: string) => {
-    const extract = (key: string) => {
-      // Modified Regex to allow spaces in headers (e.g., WORD FAMILY)
-      const regex = new RegExp(`${key}:\\s*(.*?)(?=\\n[A-Z ]+:|$)`, 's');
-      const match = text.match(regex);
-      return match ? match[1].trim() : '';
-    };
-
-    setData({
-      pos: extract('POS'),
-      ipa: extract('IPA'),
-      definition: extract('DEFINITION'),
-      bengali: extract('BENGALI'),
-      family: extract('WORD FAMILY'),
-      context: extract('CONTEXT'),
-      synonyms: extract('SYNONYMS'),
-      antonyms: extract('ANTONYMS'),
-      difficulty: extract('DIFFICULTY')
-    });
+  const handleRefresh = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    loadTopic(topic, true);
   };
 
   const handleRefreshContext = async (e: React.MouseEvent) => {
@@ -103,8 +89,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   const handleKnow = async (e: React.MouseEvent) => {
       e.stopPropagation();
       onUpdateSRS(topic, 'know');
-      // No need to manually navigate here if onUpdateSRS handles fetching the next word
-      // But based on App.tsx, onUpdateSRS calls handleRandom() which updates currentTopic
   };
 
   const isSaved = savedWords.includes(topic);
@@ -170,6 +154,10 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                <h2 className="word-small">{topic}</h2>
                <button onClick={speak} style={{ marginLeft: '10px', opacity: 0.7, border: 'none', background: 'transparent', cursor: 'pointer' }}>
                   🔊
+               </button>
+               {/* Refresh Button */}
+               <button className="refresh-icon-btn" onClick={handleRefresh} title="Regenerate Definition">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                </button>
              </div>
              <button 
