@@ -172,8 +172,8 @@ export async function* streamDefinition(
   
   POS: [part of speech]
   IPA: [IPA pronunciation]
-  DEFINITION: [Clear English definition, max 15 words]
-  BENGALI: [Bengali translation of the word]
+  DEFINITION: [Comprehensive and precise English definition, max 25 words]
+  BENGALI: [Accurate Bengali meaning (Bangla Artho), providing multiple nuances if applicable]
   WORD FAMILY: [Related forms, e.g. serendipitous (adj), serendipitously (adv)]
   CONTEXT: [One illustrative sentence using the word]
   SYNONYMS: [Comma separated list]
@@ -234,6 +234,7 @@ export async function fetchFullDefinition(topic: string): Promise<string> {
 export function parseFlashcardResponse(text: string): CardData {
   const extract = (key: string) => {
     // Modified Regex to allow spaces in headers (e.g., WORD FAMILY)
+    // The 's' flag enables dotAll mode, allowing . to match newlines
     const regex = new RegExp(`${key}:\\s*(.*?)(?=\\n[A-Z ]+:|$)`, 's');
     const match = text.match(regex);
     return match ? match[1].trim() : '';
@@ -293,7 +294,10 @@ export async function generateUsageExample(word: string): Promise<string> {
 
 export async function getShortDefinition(word: string): Promise<string> {
   if (!process.env.API_KEY) return "Definition unavailable";
-  const prompt = `Define "${word}". Output strictly: "(pos) English Definition."`;
+  // Strict format prompt for tooltips
+  const prompt = `Define "${word}". Output strictly 2 lines in this format:
+(part_of_speech) Short English definition.
+[Short Bengali definition]`;
   try {
     const response = await getAiClient().models.generateContent({
       model: textModelName,

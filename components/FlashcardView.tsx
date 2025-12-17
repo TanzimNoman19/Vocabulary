@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect, useRef } from 'react';
-import { streamDefinition, generateUsageExample, getRandomWord, CardData, parseFlashcardResponse } from '../services/geminiService';
+import { streamDefinition, generateUsageExample, getRandomWord, CardData, parseFlashcardResponse, getShortDefinition } from '../services/geminiService';
 import { Grade } from '../services/srsService';
+import InteractiveText from './InteractiveText';
+import WordTooltip from './WordTooltip';
 
 interface FlashcardViewProps {
   topic: string;
@@ -27,8 +29,13 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const activeTopic = useRef(topic);
 
+  // Tooltip State
+  const [tooltip, setTooltip] = useState<{ word: string, text: string, pos?: string, x: number, y: number } | null>(null);
+
   useEffect(() => {
     if (topic) loadTopic(topic);
+    // Close tooltip on topic change
+    setTooltip(null);
   }, [topic]);
 
   const loadTopic = async (word: string, forceRefresh = false) => {
@@ -112,9 +119,54 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     ? data.antonyms.split(',').map(s => s.trim()).filter(s => s && s.toLowerCase() !== 'n/a') 
     : [];
 
+  // --- Interactive Tooltip Logic ---
+  const handleWordClick = async (e: React.MouseEvent, word: string) => {
+    e.stopPropagation();
+    
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+
+    setTooltip({ word, text: 'Loading...', x: clientX, y: clientY });
+
+    try {
+        const fullDef = await getShortDefinition(word);
+        
+        // Match regex: (pos) Def. \n Bengali.
+        const match = fullDef.match(/^(\([a-z.]+\))\s*([\s\S]*)/i);
+        let pos = '';
+        let defText = fullDef;
+
+        if (match) {
+            pos = match[1];
+            defText = match[2];
+        }
+
+        // Check if user clicked away before response came
+        setTooltip(prev => {
+            if (prev && prev.word === word) {
+                return { ...prev, text: defText, pos: pos };
+            }
+            return prev;
+        });
+    } catch (err) {
+        setTooltip(prev => (prev && prev.word === word ? { ...prev, text: "Definition unavailable" } : prev));
+    }
+  };
+
+  const handleTooltipNavigate = () => {
+      if (tooltip) {
+          onNavigate(tooltip.word);
+          setTooltip(null);
+      }
+  };
+
   return (
-    <div className="flashcard-container">
-      <div className={`flashcard ${isFlipped ? 'flipped' : ''}`} onClick={() => !isFlipped && setIsFlipped(true)}>
+    <div className="flashcard-container" onClick={() => setTooltip(null)}>
+      <div className={`flashcard ${isFlipped ? 'flipped' : ''}`} onClick={(e) => {
+          // If clicked on interactive word span, don't flip
+          if ((e.target as HTMLElement).classList.contains('interactive-word-span')) return;
+          if (!isFlipped) setIsFlipped(true);
+      }}>
         
         {/* Front Face */}
         <div className="card-face card-front">
@@ -173,8 +225,17 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
            <div className="card-back-scrollable">
                 <div className="section-label">DEFINITION</div>
                 <div className="def-text">
-                    {data.definition || <span className="loading-dots">Loading</span>}
-                    {data.bengali && <span className="bengali-def">[{data.bengali}]</span>}
+                    {data.definition ? (
+                        <InteractiveText text={data.definition} onWordClick={handleWordClick} />
+                    ) : (
+                        <span className="loading-dots">Loading</span>
+                    )}
+                    {data.bengali && (
+                        <span className="bengali-text">
+                            {/* Bengali text is not interactive to avoid font/splitting issues, but could be enabled if robust splitting exists */}
+                            {data.bengali.replace(/[\[\]]/g, '')}
+                        </span>
+                    )}
                 </div>
 
                 {data.family && data.family !== 'N/A' && (
@@ -189,7 +250,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                     <button onClick={handleRefreshContext} style={{ color: 'var(--accent-primary)' }}>↻</button>
                 </div>
                 <div className="context-box">
-                    "{data.context || '...'}"
+                    "<InteractiveText text={data.context || '...'} onWordClick={handleWordClick} />"
                 </div>
 
                 {/* Synonyms & Antonyms Section */}
@@ -244,6 +305,19 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
       </div>
+
+      {/* Tooltip Render */}
+      {tooltip && (
+          <WordTooltip 
+              word={tooltip.word}
+              text={tooltip.text}
+              pos={tooltip.pos}
+              x={tooltip.x}
+              y={tooltip.y}
+              onOpen={handleTooltipNavigate}
+              onClose={() => setTooltip(null)}
+          />
+      )}
 
     </div>
   );

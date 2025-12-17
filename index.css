@@ -55,6 +55,18 @@ html, body {
   transition: background-color 0.3s ease;
 }
 
+/* Formal Bengali Font Style */
+.bengali-text {
+  font-family: 'Noto Serif Bengali', serif;
+  display: block;
+  margin-top: 6px;
+  color: inherit; /* Inherit color from parent (white in tooltip, primary in card) */
+  font-size: 1.05rem;
+  line-height: 1.5;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
 #root {
   height: 100%;
   display: flex;
@@ -655,4 +667,46 @@ button {
   position: absolute; top: 80px; left: 1rem; right: 1rem;
   background: var(--card-bg); padding: 1.5rem; border-radius: 24px;
   z-index: 200; box-shadow: var(--shadow-float); border: 1px solid var(--border-color);
+}
+
+/* Tooltip specific styles */
+.tooltip {
+  position: fixed;
+  z-index: 2000;
+  background: #000;
+  color: #fff;
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  width: 260px;
+  animation: fadeIn 0.2s ease-out;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.tooltip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #000; /* Matches tooltip bg */
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Interactive Text Span Hover Effect */
+.interactive-word-span:hover {
+  background-color: rgba(255, 193, 7, 0.2); /* Slight highlight on hover */
+  border-radius: 4px;
 }
