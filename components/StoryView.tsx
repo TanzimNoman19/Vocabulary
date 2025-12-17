@@ -4,6 +4,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { generateStorySegment, getShortDefinition, generateCreativePrompt } from '../services/geminiService';
+import WordTooltip from './WordTooltip';
 
 export interface StoryState {
   prompt: string;
@@ -109,8 +110,8 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
         const fullDef = await getShortDefinition(word);
         
         // Parse POS and Definition based on format: "(pos) Definition"
-        // Regex looks for content in parenthesis at start, followed by rest
-        const match = fullDef.match(/^(\([a-z.]+\))\s*(.*)/i);
+        // Use [\s\S]* to match newlines correctly for the Bengali definition
+        const match = fullDef.match(/^(\([a-z.]+\))\s*([\s\S]*)/i);
         
         let pos = '';
         let defText = fullDef;
@@ -124,6 +125,13 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
         setTooltip(prev => (prev && prev.word === word ? { ...prev, text: defText, pos: pos } : prev));
     } catch (err) {
         setTooltip(prev => (prev && prev.word === word ? { ...prev, text: "Definition unavailable" } : prev));
+    }
+  };
+
+  const handleOpenPage = () => {
+    if (tooltip) {
+        onNavigate(tooltip.word);
+        setTooltip(null);
     }
   };
 
@@ -224,34 +232,15 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
         </div>
 
         {tooltip && (
-            <div 
-                className="tooltip" 
-                style={{ 
-                    top: tooltip.y - 120, // Shifted up slightly more to accommodate header
-                    left: Math.min(Math.max(tooltip.x - 125, 10), window.innerWidth - 260) 
-                }}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="tooltip-header">
-                    <div>
-                        <strong>{tooltip.word}</strong>
-                        {tooltip.pos && <span className="tooltip-pos">{tooltip.pos}</span>}
-                    </div>
-                    <button 
-                        className="wiki-icon-btn" 
-                        onClick={() => onNavigate(tooltip.word)}
-                        title="Open Wiki Page"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                            <polyline points="15 3 21 3 21 9"></polyline>
-                            <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
-                    </button>
-                </div>
-                <p>{tooltip.text}</p>
-                <div className="tooltip-arrow"></div>
-            </div>
+            <WordTooltip 
+                word={tooltip.word}
+                text={tooltip.text}
+                pos={tooltip.pos}
+                x={tooltip.x}
+                y={tooltip.y}
+                onOpen={handleOpenPage}
+                onClose={() => setTooltip(null)}
+            />
         )}
       </div>
     </div>

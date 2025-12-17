@@ -4,6 +4,7 @@
 */
 
 import {GoogleGenAI, Tool, FunctionDeclaration, Type} from '@google/genai';
+import { DICTIONARY_WORDS } from './dictionaryData';
 
 // Initialize the client lazily or safely to prevent top-level crashes
 let ai: GoogleGenAI;
@@ -12,9 +13,6 @@ const getAiClient = () => {
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
       console.error('API_KEY is missing.');
-      // Return a dummy client or throw to be handled by caller, 
-      // but strictly following instruction to use process.env.API_KEY.
-      // We instantiate with a placeholder if empty to allow app to load (calls will fail gracefully later).
       ai = new GoogleGenAI({apiKey: 'MISSING_KEY'}); 
     } else {
       ai = new GoogleGenAI({apiKey: apiKey});
@@ -23,42 +21,40 @@ const getAiClient = () => {
   return ai;
 };
 
-const artModelName = 'gemini-2.5-flash';
 const textModelName = 'gemini-2.5-flash-lite';
 const chatModelName = 'gemini-2.5-flash';
 
-/**
- * Art-direction toggle for ASCII art generation.
- * `true`: Slower, higher-quality results (allows the model to "think").
- * `false`: Faster, potentially lower-quality results (skips thinking).
- */
-const ENABLE_THINKING_FOR_ASCII_ART = false;
-
-/**
- * Art-direction toggle for blocky ASCII text generation.
- * `true`: Generates both creative art and blocky text for the topic name.
- * `false`: Generates only the creative ASCII art.
- */
-const ENABLE_ASCII_TEXT_GENERATION = false;
+// Helper to detect quota errors
+const isQuotaError = (error: any): boolean => {
+  if (!error) return false;
+  try {
+     const str = JSON.stringify(error);
+     if (str.includes('429') || str.includes('RESOURCE_EXHAUSTED') || str.includes('Quota exceeded')) return true;
+  } catch(e) {}
+  
+  const msg = error?.message || '';
+  const status = error?.status || '';
+  const code = error?.code || '';
+  
+  return msg.includes('429') || 
+         msg.includes('RESOURCE_EXHAUSTED') || 
+         status === 'RESOURCE_EXHAUSTED' ||
+         code === 429;
+};
 
 export interface AsciiArtData {
-  art: string;
-  text?: string; // Text is now optional
+    art: string;
+    text?: string;
 }
 
-// --- Chat & Tool Definitions ---
-
+// --- Chat Tools ---
 const addWordsTool: FunctionDeclaration = {
   name: 'addWordsToCollection',
-  description: 'Add a list of words to the user\'s saved vocabulary collection. Use this when the user wants to save multiple words at once.',
+  description: 'Add a list of words to the user\'s saved vocabulary collection.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      words: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING },
-        description: 'The list of words to add.',
-      },
+      words: { type: Type.ARRAY, items: { type: Type.STRING } },
     },
     required: ['words'],
   },
@@ -70,11 +66,7 @@ const removeWordsTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      words: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING },
-        description: 'The list of words to remove.',
-      },
+      words: { type: Type.ARRAY, items: { type: Type.STRING } },
     },
     required: ['words'],
   },
@@ -82,14 +74,11 @@ const removeWordsTool: FunctionDeclaration = {
 
 const navigateTool: FunctionDeclaration = {
   name: 'navigateToWord',
-  description: 'Navigate the app to a specific word to show its definition. Use this when the user asks to "define", "show", or "go to" a word.',
+  description: 'Navigate the app to a specific word to show its definition.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      word: {
-        type: Type.STRING,
-        description: 'The word to navigate to.',
-      },
+      word: { type: Type.STRING },
     },
     required: ['word'],
   },
@@ -113,71 +102,43 @@ export const createChatSession = () => {
     model: chatModelName,
     config: {
       tools: vocabTools,
-      systemInstruction: `You are the "Infinite Vocabulary Assistant". 
-      You have full control over the user's vocabulary list and the app navigation.
-      
-      Capabilities:
-      1. You can bulk add or remove words from their saved list using tools.
-      2. You can navigate the app to define specific words.
-      3. You can answer questions about etymology, usage, or nuance directly in the chat.
-      
-      Tone: Helpful, sophisticated, yet concise.
-      
-      If the user asks to "save these words: X, Y, Z", call the addWordsToCollection tool immediately.
-      If the user asks "what is in my list?", call the getSavedWords tool.`,
+      systemInstruction: `You are LexiFlow AI. Help user manage vocab.`,
     }
   });
 };
 
-
 /**
  * Streams a definition for a given topic from the Gemini API.
- * @param topic The word or term to define.
- * @returns An async generator that yields text chunks of the definition.
  */
 export async function* streamDefinition(
   topic: string,
+  concise: boolean = false
 ): AsyncGenerator<string, void, undefined> {
   if (!process.env.API_KEY) {
-    yield 'Error: API_KEY is not configured. Please check your environment variables to continue.';
+    yield 'Error: API_KEY is not configured.';
     return;
   }
 
-  const prompt = `Define the word "${topic}" for a vocabulary learner. 
+  const prompt = `Define "${topic}" for a vocabulary flashcard.
   
-  Format the response exactly as follows using ### headers:
+  Format the response EXACTLY as follows using these headers:
   
-  /${topic}/ (part of speech) [IPA pronunciation]
+  POS: [part of speech]
+  IPA: [IPA pronunciation]
+  DEFINITION: [Clear English definition, max 15 words]
+  BENGALI: [Bengali translation of the word]
+  WORD FAMILY: [Related forms, e.g. serendipitous (adj), serendipitously (adv)]
+  CONTEXT: [One illustrative sentence using the word]
+  SYNONYMS: [Comma separated list]
+  ANTONYMS: [Comma separated list or N/A]
   
-  ### DEFINITION
-  [Clear, memorable definition]
-  
-  ### ETYMOLOGY
-  [Brief origin/root info]
-
-  ### WORD FAMILY & FORMS
-  [List related parts of speech, derivatives, prefix/suffix variations. E.g. "Noun: X", "Adjective: Y", "Prefix origin: ..."]
-  
-  ### SYNONYMS
-  [List of 3-5 synonyms, comma separated]
-  
-  ### ANTONYMS
-  [List of 3-5 antonyms, comma separated, or "N/A"]
-  
-  ### USAGE
-  "[A single example sentence using the word]"
-  
-  ### MNEMONIC
-  [A short, helpful memory aid]`;
+  Do not add markdown bolding like **. Just raw text after headers.`;
 
   try {
     const response = await getAiClient().models.generateContentStream({
       model: textModelName,
       contents: prompt,
-      config: {
-        // Disable thinking for the lowest possible latency, as requested.
-        thinkingConfig: { thinkingBudget: 0 },
-      },
+      config: { thinkingConfig: { thinkingBudget: 0 } },
     });
 
     for await (const chunk of response) {
@@ -185,62 +146,49 @@ export async function* streamDefinition(
         yield chunk.text;
       }
     }
-  } catch (error) {
-    console.error('Error streaming from Gemini:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'An unknown error occurred.';
-    yield `Error: Could not generate content for "${topic}". ${errorMessage}`;
-    // Re-throwing allows the caller to handle the error state definitively.
-    throw new Error(errorMessage);
+  } catch (error: any) {
+    console.error('Error streaming:', error);
+    if (isQuotaError(error)) {
+        yield `POS: noun
+IPA: /429/
+DEFINITION: Service unavailable due to quota.
+BENGALI: কোটা অতিক্রান্ত
+WORD FAMILY: N/A
+CONTEXT: N/A
+SYNONYMS: N/A
+ANTONYMS: N/A`;
+        return;
+    }
+    yield `Error: ${error.message}`;
   }
 }
 
-/**
- * Generates a single random word or concept using the Gemini API.
- * @returns A promise that resolves to a single random word.
- */
 export async function getRandomWord(): Promise<string> {
   if (!process.env.API_KEY) {
-    throw new Error('API_KEY is not configured.');
+     const randomIndex = Math.floor(Math.random() * DICTIONARY_WORDS.length);
+     return DICTIONARY_WORDS[randomIndex];
   }
 
-  // Adding a timestamp/random seed to force non-cached, unique results
   const randomSeed = Math.floor(Math.random() * 100000);
-  const prompt = `Generate a single, interesting, sophisticated English vocabulary word (SAT/GRE level). 
-  It must be random and unique each time. Random seed: ${randomSeed}.
-  Examples of difficulty: "Ephemeral", "Obfuscate", "Serendipity", "Petrichor". 
-  Respond with only the word itself, no punctuation.`;
+  const prompt = `Generate a single, sophisticated English vocabulary word (SAT/GRE level). 
+  Random seed: ${randomSeed}. Respond with only the word.`;
 
   try {
     const response = await getAiClient().models.generateContent({
       model: textModelName,
       contents: prompt,
-      config: {
-        // Disable thinking for low latency.
-        thinkingConfig: { thinkingBudget: 0 },
-        temperature: 1.2, // High temperature for maximum randomness
-      },
+      config: { thinkingConfig: { thinkingBudget: 0 }, temperature: 1.2 },
     });
     return response.text.trim();
   } catch (error) {
-    console.error('Error getting random word from Gemini:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'An unknown error occurred.';
-    throw new Error(`Could not get random word: ${errorMessage}`);
+    const randomIndex = Math.floor(Math.random() * DICTIONARY_WORDS.length);
+    return DICTIONARY_WORDS[randomIndex];
   }
 }
 
-/**
- * Generates a fresh usage sentence for a given word.
- */
 export async function generateUsageExample(word: string): Promise<string> {
-  if (!process.env.API_KEY) {
-    throw new Error('API_KEY is not configured.');
-  }
-
-  const prompt = `Write a single, unique, and illustrative sentence using the word "${word}". 
-  Make it different from standard dictionary examples. Do not define the word, just use it.`;
-
+  if (!process.env.API_KEY) return "Example unavailable.";
+  const prompt = `Write a single, unique sentence using the word "${word}".`;
   try {
     const response = await getAiClient().models.generateContent({
       model: textModelName,
@@ -249,55 +197,48 @@ export async function generateUsageExample(word: string): Promise<string> {
     });
     return response.text.trim();
   } catch (error) {
-    return `Could not generate usage example for ${word}.`;
+    return `Usage example unavailable.`;
   }
 }
 
-// --- Story Mode Services ---
+export async function getShortDefinition(word: string): Promise<string> {
+  if (!process.env.API_KEY) return "Definition unavailable";
+  const prompt = `Define "${word}". Output strictly: "(pos) English Definition."`;
+  try {
+    const response = await getAiClient().models.generateContent({
+      model: textModelName,
+      contents: prompt,
+      config: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+    return response.text.trim();
+  } catch (error) {
+    return "Definition unavailable.";
+  }
+}
 
-export const STORY_PROMPTS = [
-  "A cyberpunk detective solving a crime in a city where memories can be traded.",
-  "An ancient library where the books whisper secrets to those who listen.",
-  "A serene journey through a forest where the seasons change with every step.",
-  "A high-stakes negotiation between two galactic empires on the brink of war.",
-  "A solitary lighthouse keeper who discovers a message in a bottle from the future.",
-  "A Victorian-era inventor trying to create a machine that captures dreams.",
-  "A group of explorers discovering a hidden civilization beneath the ice of Antarctica.",
-  "A coffee shop in Tokyo that only appears when it rains.",
-  "A musician who finds a melody that can manipulate time."
-];
+export async function generateCreativePrompt(): Promise<string> {
+  if (!process.env.API_KEY) return "A mystery in an ancient library...";
+  const prompt = `Generate a creative short story prompt. One sentence.`;
+  try {
+    const response = await getAiClient().models.generateContent({
+      model: textModelName,
+      contents: prompt,
+      config: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+    return response.text.trim();
+  } catch (error) {
+    return "A sudden storm changes everything.";
+  }
+}
 
-/**
- * Generates a segment of a story.
- * @param userContext User instructions (style, keywords, etc.)
- * @param previousText The story so far (to maintain continuity)
- */
-export async function generateStorySegment(userContext: string, previousText: string = ''): Promise<string> {
+export async function generateStorySegment(promptContext: string, previousText: string = ''): Promise<string> {
   if (!process.env.API_KEY) throw new Error('API_KEY missing');
 
   let prompt = '';
-  
   if (!previousText) {
-    // START OF STORY
-    prompt = `Write the opening paragraph (approx 100-150 words) of a short story based on this prompt: "${userContext}".
-    
-    Guidelines:
-    - Use sophisticated, evocative vocabulary (GRE/SAT level).
-    - Style: Immersive and engaging.
-    - Do not output any meta-text like "Here is the story". Just the story text.`;
+    prompt = `Write the opening paragraph (100 words) of a story based on: "${promptContext}". Sophisticated vocab.`;
   } else {
-    // CONTINUATION
-    prompt = `Continue the following story. 
-    
-    PREVIOUS CONTEXT: "${previousText.slice(-1000)}"
-    
-    USER INSTRUCTIONS/STYLE: "${userContext}"
-    
-    Guidelines:
-    - Write the next segment (approx 100-150 words).
-    - Maintain the tone and plot continuity.
-    - Use sophisticated vocabulary.
-    - Do not repeat the previous text.`;
+    prompt = `Continue this story: "${previousText.slice(-500)}". Context: "${promptContext}". Next 100 words.`;
   }
 
   try {
@@ -308,164 +249,11 @@ export async function generateStorySegment(userContext: string, previousText: st
     });
     return response.text.trim();
   } catch (error) {
-    throw new Error("Failed to generate story segment.");
+    return "Story generation unavailable.";
   }
 }
 
-/**
- * Fetches a very short definition for tooltip.
- */
-export async function getShortDefinition(word: string): Promise<string> {
-  if (!process.env.API_KEY) return "Definition unavailable";
-
-  // Requesting specific format to separate POS and Definition
-  const prompt = `Define "${word}". Output strictly in this format: "(pos) Definition". Keep definition under 6 words. Example: "(n) A sweet fruit."`;
-
-  try {
-    const response = await getAiClient().models.generateContent({
-      model: textModelName, // Use Flash Lite for speed
-      contents: prompt,
-      config: { thinkingConfig: { thinkingBudget: 0 } },
-    });
-    return response.text.trim();
-  } catch (error) {
-    return "Could not define.";
-  }
-}
-
-/**
- * Generates a creative random story prompt.
- */
-export async function generateCreativePrompt(): Promise<string> {
-  if (!process.env.API_KEY) return STORY_PROMPTS[0];
-
-  const prompt = `Generate a single, creative, and evocative writing prompt for a short story. One sentence only.`;
-
-  try {
-    const response = await getAiClient().models.generateContent({
-      model: textModelName,
-      contents: prompt,
-      config: { thinkingConfig: { thinkingBudget: 0 } },
-    });
-    return response.text.trim();
-  } catch (error) {
-    // Fallback to local list if API fails
-    const random = STORY_PROMPTS[Math.floor(Math.random() * STORY_PROMPTS.length)];
-    return random;
-  }
-}
-
-/**
- * Generates ASCII art and optionally text for a given topic.
- * @param topic The topic to generate art for.
- * @returns A promise that resolves to an object with art and optional text.
- */
 export async function generateAsciiArt(topic: string): Promise<AsciiArtData> {
-  if (!process.env.API_KEY) {
-    throw new Error('API_KEY is not configured.');
-  }
-  
-  const artPromptPart = `1. "art": meta ASCII visualization of the meaning of the word "${topic}":
-  - Palette: │─┌┐└┘├┤┬┴┼►◄▲▼○●◐◑░▒▓█▀▄■□▪▫★☆♦♠♣♥⟨⟩/\\_|
-  - Shape mirrors definition - make the visual form embody the word's essence.
-  - Examples: 
-    * "Fragile" → thin lines, gaps
-    * "Hierarchy" → pyramid structure
-    * "Chaos" → scattered characters
-  - Return as single string with \n for line breaks`;
-
-
-  const keysDescription = `one key: "art"`;
-  const promptBody = artPromptPart;
-
-  const prompt = `For "${topic}", create a JSON object with ${keysDescription}.
-${promptBody}
-
-Return ONLY the raw JSON object, no additional text. The response must start with "{" and end with "}" and contain only the art property.`;
-
-  const maxRetries = 3;
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      // FIX: Construct config object conditionally to avoid spreading a boolean
-      const config: any = {
-        responseMimeType: 'application/json',
-      };
-      if (!ENABLE_THINKING_FOR_ASCII_ART) {
-        config.thinkingConfig = { thinkingBudget: 0 };
-      }
-
-      const response = await getAiClient().models.generateContent({
-        model: artModelName,
-        contents: prompt,
-        config: config,
-      });
-
-      let jsonStr = response.text.trim();
-      
-      // Robust extraction: Find the first { and last } to ignore potential markdown garbage
-      const firstBrace = jsonStr.indexOf('{');
-      const lastBrace = jsonStr.lastIndexOf('}');
-      
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
-        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-      } else {
-        // Fallback to removing markdown fences if braces aren't found normally
-        const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
-        const match = jsonStr.match(fenceRegex);
-        if (match && match[1]) {
-          jsonStr = match[1].trim();
-        }
-      }
-
-      // Ensure the string looks like an object
-      if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
-        throw new Error('Response is not a valid JSON object');
-      }
-
-      const parsedData = JSON.parse(jsonStr) as AsciiArtData;
-      
-      // Validate the response structure
-      if (typeof parsedData.art !== 'string' || parsedData.art.trim().length === 0) {
-        throw new Error('Invalid or empty ASCII art in response');
-      }
-      
-      // If we get here, the validation passed
-      const result: AsciiArtData = {
-        art: parsedData.art,
-      };
-
-      if (ENABLE_ASCII_TEXT_GENERATION && parsedData.text) {
-        result.text = parsedData.text;
-      }
-      
-      return result;
-
-    } catch (error: any) {
-      lastError = error instanceof Error ? error : new Error('Unknown error occurred');
-      
-      // Check specifically for Rate Limits (429) or Quota Exhaustion
-      // These are not transient errors that retries will fix quickly.
-      const msg = lastError.message || '';
-      const status = error.status || '';
-      
-      if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || status === 'RESOURCE_EXHAUSTED') {
-         // Stop retrying immediately to save resources and fallback gracefully
-         throw lastError;
-      }
-      
-      console.warn(`Attempt ${attempt}/${maxRetries} failed:`, lastError.message);
-      
-      if (attempt === maxRetries) {
-        // Do not log "console.error" here to avoid noise in the browser console.
-        // The caller (App.tsx) handles the fallback.
-        throw new Error(`Could not generate ASCII art after ${maxRetries} attempts: ${lastError.message}`);
-      }
-      // Continue to next attempt
-    }
-  }
-
-  // This should never be reached, but just in case
-  throw lastError || new Error('All retry attempts failed');
+  // Minimal stub implementation for legacy support if needed
+  return { art: `[ASCII Art for ${topic}]` };
 }

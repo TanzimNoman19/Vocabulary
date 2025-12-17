@@ -3,495 +3,180 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect, useRef } from 'react';
-import { streamDefinition, getRandomWord, generateUsageExample } from '../services/geminiService';
-import { Grade, getDueWords } from '../services/srsService';
+import { streamDefinition, generateUsageExample } from '../services/geminiService';
+import { Grade } from '../services/srsService';
 
 interface FlashcardViewProps {
-  onClose: () => void;
+  topic: string;
   savedWords: string[];
   srsData: Record<string, any>;
   onUpdateSRS: (word: string, grade: Grade) => void;
   onToggleSave: (word: string) => void;
   onNavigate: (word: string) => void;
-  onView: (word: string) => void;
 }
 
-type Mode = 'saved' | 'random';
-
-// Helper component to render text as clickable buttons
-const InteractiveText: React.FC<{ text: string; onNavigate: (word: string) => void }> = ({ text, onNavigate }) => {
-  const words = text.split(/(\s+)/).filter(Boolean);
-  return (
-    <>
-      {words.map((word, index) => {
-        if (/\S/.test(word)) {
-          const cleanWord = word.replace(/[.,!?;:()"']/g, '');
-          if (cleanWord) {
-            return (
-              <button
-                key={index}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onNavigate(cleanWord);
-                }}
-                className="interactive-word"
-                aria-label={`Learn more about ${cleanWord}`}
-              >
-                {word}
-              </button>
-            );
-          }
-        }
-        return <span key={index}>{word}</span>;
-      })}
-    </>
-  );
-};
-
-interface CollapsibleSectionProps {
-  title: string;
-  isOpen: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-  actionButton?: React.ReactNode;
-}
-
-const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, isOpen, onToggle, children, actionButton }) => {
-  return (
-    <div className={`section collapsible-section ${isOpen ? 'open' : ''}`}>
-      <div className="section-header" onClick={(e) => { e.stopPropagation(); onToggle(); }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span className={`arrow ${isOpen ? 'down' : 'right'}`}>▶</span>
-          <h4>{title}</h4>
-        </div>
-        {actionButton}
-      </div>
-      {isOpen && (
-        <div className="section-content">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-};
-
-interface FlashcardData {
+interface CardData {
+  pos: string;
+  ipa: string;
   definition: string;
-  etymology: string;
+  bengali: string;
+  family: string;
+  context: string;
   synonyms: string;
   antonyms: string;
-  usage: string;
-  mnemonic: string;
 }
 
-const FlashcardView: React.FC<FlashcardViewProps> = ({ onClose, savedWords, srsData, onUpdateSRS, onToggleSave, onNavigate, onView }) => {
-  const [mode, setMode] = useState<Mode>('saved');
-  const [currentWord, setCurrentWord] = useState<string>('');
+const FlashcardView: React.FC<FlashcardViewProps> = ({ 
+    topic, savedWords, srsData, onUpdateSRS, onToggleSave, onNavigate 
+}) => {
   const [isFlipped, setIsFlipped] = useState(false);
-  
-  // History stack for "Previous" navigation
-  const [history, setHistory] = useState<string[]>([]);
-
-  // Persistent section states (preference preserved across cards)
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    definition: true,
-    etymology: false,
-    synonyms: false,
-    antonyms: false,
-    usage: true,
-    mnemonic: false
+  const [data, setData] = useState<CardData>({
+    pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: ''
   });
-
-  const [cardData, setCardData] = useState<FlashcardData>({
-    definition: '',
-    etymology: '',
-    synonyms: '',
-    antonyms: '',
-    usage: '',
-    mnemonic: ''
-  });
-  
   const [isLoading, setIsLoading] = useState(false);
-  const [queue, setQueue] = useState<string[]>([]);
-  
-  // Refs for gesture handling and async cancellation
-  const touchStartY = useRef<number | null>(null);
-  const activeWordRef = useRef<string>('');
-  const wasSwipeRef = useRef<boolean>(false);
+  const activeTopic = useRef(topic);
 
   useEffect(() => {
-    // Initialize queue based on mode
-    setHistory([]); // Clear history on mode switch
-    
-    if (mode === 'saved') {
-      const dueWords = getDueWords(savedWords, srsData);
-      setQueue(dueWords);
-      
-      if (dueWords.length > 0) {
-        loadWord(dueWords[0]);
-      } else {
-        setCurrentWord('');
-        setCardData({} as FlashcardData);
-      }
-    } else if (mode === 'random') {
-      loadRandomWord();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, savedWords]);
+    if (topic) loadTopic(topic);
+  }, [topic]);
 
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
-  const loadRandomWord = async () => {
+  const loadTopic = async (word: string) => {
+    activeTopic.current = word;
+    setIsFlipped(false);
     setIsLoading(true);
+    setData({ pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '' });
+    
     try {
-      const word = await getRandomWord();
-      loadWord(word);
+      let fullText = '';
+      for await (const chunk of streamDefinition(word)) {
+        if (activeTopic.current !== word) return;
+        fullText += chunk;
+      }
+      if (activeTopic.current === word) {
+        parseData(fullText);
+        setIsLoading(false);
+      }
     } catch (e) {
       console.error(e);
       setIsLoading(false);
     }
   };
 
-  const loadWord = async (word: string, autoReveal: boolean = false) => {
-    activeWordRef.current = word; // Track active request to prevent race conditions
-    setCurrentWord(word);
-    setIsFlipped(false);
-    setIsLoading(true);
-    setCardData({
-      definition: '',
-      etymology: '',
-      synonyms: '',
-      antonyms: '',
-      usage: '',
-      mnemonic: ''
-    });
-    
-    // Add to app history
-    onView(word);
-
-    try {
-      let fullText = '';
-      for await (const chunk of streamDefinition(word)) {
-        if (activeWordRef.current !== word) return; // Cancel if user switched words
-        fullText += chunk;
-      }
-      
-      if (activeWordRef.current === word) {
-        parseContent(fullText);
-      }
-    } catch (e) {
-      console.error(e);
-      if (activeWordRef.current === word) {
-        setCardData(prev => ({ ...prev, definition: 'Failed to load definition.' }));
-      }
-    } finally {
-      if (activeWordRef.current === word) {
-        setIsLoading(false);
-        if (autoReveal) {
-          setIsFlipped(true);
-        }
-      }
-    }
-  };
-
-  const parseContent = (text: string) => {
-    const sections: FlashcardData = {
-      definition: '',
-      etymology: '',
-      synonyms: '',
-      antonyms: '',
-      usage: '',
-      mnemonic: ''
-    };
-
-    const extract = (headerName: string) => {
-      const regex = new RegExp(`(?:###\\s*${headerName}|${headerName})\\s*\\n([\\s\\S]*?)(?=(?:###\\s*|DEFINITION|ETYMOLOGY|SYNONYMS|ANTONYMS|USAGE|MNEMONIC)|$)`, 'i');
+  const parseData = (text: string) => {
+    const extract = (key: string) => {
+      const regex = new RegExp(`${key}:\\s*(.*?)(?=\\n[A-Z]+:|$)`, 's');
       const match = text.match(regex);
       return match ? match[1].trim() : '';
     };
 
-    sections.definition = extract('DEFINITION');
-    sections.etymology = extract('ETYMOLOGY');
-    sections.synonyms = extract('SYNONYMS');
-    sections.antonyms = extract('ANTONYMS');
-    sections.usage = extract('USAGE');
-    sections.mnemonic = extract('MNEMONIC');
-
-    if (!sections.definition && !sections.usage) {
-       const defMatch = text.match(/DEFINITION\s*\n([\s\S]*?)(?=\n\n(?:ETYMOLOGY|SYNONYMS|ANTONYMS|USAGE|MNEMONIC)|$)/i);
-       if (defMatch) sections.definition = defMatch[1].trim();
-    }
-
-    sections.usage = sections.usage.replace(/^"|"$/g, '').trim();
-    setCardData(sections);
+    setData({
+      pos: extract('POS'),
+      ipa: extract('IPA'),
+      definition: extract('DEFINITION'),
+      bengali: extract('BENGALI'),
+      family: extract('WORD FAMILY'),
+      context: extract('CONTEXT'),
+      synonyms: extract('SYNONYMS'),
+      antonyms: extract('ANTONYMS')
+    });
   };
 
-  const handleNext = () => {
-    if (currentWord) {
-      setHistory(prev => [...prev, currentWord]);
-    }
-
-    if (mode === 'saved') {
-      // In saved mode, we consume the queue
-      const nextQueue = queue.length > 0 && queue[0] === currentWord ? queue.slice(1) : queue;
-      
-      if (nextQueue.length > 0) {
-        setQueue(nextQueue);
-        loadWord(nextQueue[0]);
-      } else {
-        setQueue([]);
-        setCurrentWord(''); // Finished queue
-      }
-    } else {
-      loadRandomWord();
-    }
-  };
-
-  const handlePrevious = () => {
-    if (history.length === 0) return;
-    const previousWord = history[history.length - 1];
-    const newHistory = history.slice(0, -1);
-    setHistory(newHistory);
-
-    // If in saved mode, put the current word back into queue so it can be seen again if we go forward
-    if (mode === 'saved' && currentWord) {
-      setQueue(prev => [currentWord, ...prev]);
-    }
-    
-    loadWord(previousWord);
-  };
-
-  // Handles clicking a word inside the flashcard (definition, synonyms, etc.)
-  // This keeps navigation inside the flashcard view instead of exiting to the main app.
-  const handleInternalNavigate = (word: string) => {
-    if (currentWord) {
-      setHistory(prev => [...prev, currentWord]);
-    }
-    loadWord(word, true);
-  };
-
-  const handleGrade = (grade: Grade) => {
-    if (currentWord) {
-      onUpdateSRS(currentWord, grade);
-    }
-    handleNext();
-  };
-
-  const refreshUsage = async (e: React.MouseEvent) => {
+  const handleRefreshContext = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!currentWord) return;
-    const oldUsage = cardData.usage;
-    setCardData(prev => ({ ...prev, usage: 'Generating new example...' }));
-    const newSentence = await generateUsageExample(currentWord);
-    setCardData(prev => ({ ...prev, usage: newSentence || oldUsage }));
+    const newContext = await generateUsageExample(topic);
+    setData(prev => ({ ...prev, context: newContext }));
   };
 
-  // Touch Handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-    wasSwipeRef.current = false;
+  const isSaved = savedWords.includes(topic);
+  const srsItem = srsData[topic];
+  const isLearning = srsItem && srsItem.masteryLevel > 0;
+  const badgeText = isLearning ? 'LEARNING' : 'NEW';
+
+  // Speak function
+  const speak = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const utterance = new SpeechSynthesisUtterance(topic);
+    window.speechSynthesis.speak(utterance);
   };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartY.current === null) return;
-    const touchEndY = e.changedTouches[0].clientY;
-    const deltaY = touchStartY.current - touchEndY;
-
-    // Threshold for swipe
-    if (Math.abs(deltaY) > 50) { 
-      // ONLY perform swipe actions if the card is NOT flipped (revealed)
-      if (!isFlipped && currentWord) {
-        wasSwipeRef.current = true;
-        if (deltaY > 0) {
-          handleNext(); // Swipe UP -> Next
-        } else {
-          handlePrevious(); // Swipe DOWN -> Previous
-        }
-      }
-    }
-    touchStartY.current = null;
-  };
-
-  const handleCardClick = () => {
-    // If a swipe just happened, don't interpret it as a click/flip
-    if (wasSwipeRef.current) {
-      wasSwipeRef.current = false;
-      return;
-    }
-    if (!isFlipped && currentWord) {
-      setIsFlipped(true);
-    }
-  };
-
-  const isSaved = savedWords.some(w => w.toLowerCase() === currentWord.toLowerCase());
-  
-  // Check if we are in empty state for saved mode
-  const isSavedEmpty = mode === 'saved' && !currentWord && !isLoading;
 
   return (
-    <div className="flashcard-overlay" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      <div className="flashcard-container">
-        {/* Header - Always Visible */}
-        <div className="flashcard-header">
-          <div className="mode-toggle">
-            <button 
-              className={mode === 'saved' ? 'active' : ''} 
-              onClick={() => setMode('saved')}
-            >Saved</button>
-            <button 
-              className={mode === 'random' ? 'active' : ''} 
-              onClick={() => setMode('random')}
-            >Random</button>
-          </div>
-          <button onClick={onClose} className="close-button">✕</button>
+    <div className="flashcard-container">
+      <div className={`flashcard ${isFlipped ? 'flipped' : ''}`} onClick={() => !isFlipped && setIsFlipped(true)}>
+        
+        {/* Front Face */}
+        <div className="card-face card-front">
+           <button 
+             className={`like-btn ${isSaved ? 'liked' : ''}`} 
+             onClick={(e) => { e.stopPropagation(); onToggleSave(topic); }}
+           >
+             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+           </button>
+
+           <div className="word-display">{topic}</div>
+           <div className="pos-tag">{data.pos || '...'}</div>
+           <div className="status-badge">{badgeText}</div>
+           
+           <div className="tap-hint">Tap to flip</div>
         </div>
 
-        {/* Card Area */}
-        {isSavedEmpty ? (
-             <div className="card" style={{ cursor: 'default' }}>
-                <div className="card-inner">
-                    <div className="card-front" style={{ background: 'transparent', boxShadow: 'none', border: 'none' }}>
-                        <h2>All caught up!</h2>
-                        <p>You have mastered all due words for now.</p>
-                        <p className="card-instruction">Review later to increase mastery.</p>
-                        <button onClick={() => setMode('random')} className="mode-toggle-btn" style={{ marginTop: '1rem', border: '1px solid currentColor', padding: '0.5rem 1rem', borderRadius: '20px' }}>
-                            Practice Random Words
-                        </button>
-                    </div>
-                </div>
+        {/* Back Face */}
+        <div className="card-face card-back">
+           <div className="back-header">
+             <div>
+               <h2 className="word-small">{topic}</h2>
+               <div className="ipa-text">
+                  {data.ipa} 
+                  <button onClick={speak} style={{ marginLeft: '8px', verticalAlign: 'middle', opacity: 0.7 }}>
+                     🔊
+                  </button>
+               </div>
              </div>
-        ) : (
-            <div className={`card ${isFlipped ? 'flipped' : ''}`} onClick={handleCardClick}>
-            <div className="card-inner">
-                {/* Front */}
-                <div className="card-front">
-                {isLoading ? (
-                    <div className="loading-spinner">Loading...</div>
-                ) : (
-                    <>
-                    <h1 className="card-word">{currentWord}</h1>
-                    <p className="card-instruction">Tap to reveal</p>
-                    </>
-                )}
-                </div>
+             <button 
+                className={`like-btn ${isSaved ? 'liked' : ''}`} 
+                onClick={(e) => { e.stopPropagation(); onToggleSave(topic); }}
+                style={{ position: 'relative', top: 0, right: 0 }}
+             >
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+             </button>
+           </div>
 
-                {/* Back */}
-                <div className="card-back">
-                <div className="card-content" style={{ width: '100%' }}>
-                    <div className="card-header-back">
-                    <h2 
-                        className="card-word-small interactive-word" 
-                        onClick={(e) => { e.stopPropagation(); handleInternalNavigate(currentWord); }}
-                        style={{ cursor: 'pointer', marginRight: 'auto' }}
-                    >
-                        {currentWord}
-                    </h2>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onToggleSave(currentWord); }}
-                        className={`save-icon-btn ${isSaved ? 'saved' : ''}`}
-                        title={isSaved ? "Remove from saved" : "Save word"}
-                    >
-                        {isSaved ? '★' : '☆'}
-                    </button>
-                    </div>
-                    
-                    {/* Collapsible Sections */}
-                    
-                    {cardData.definition && (
-                    <CollapsibleSection 
-                        title="Definition" 
-                        isOpen={expandedSections.definition} 
-                        onToggle={() => toggleSection('definition')}
-                    >
-                        <p><InteractiveText text={cardData.definition} onNavigate={handleInternalNavigate} /></p>
-                    </CollapsibleSection>
-                    )}
+           <div className="section-label">DEFINITION</div>
+           <div className="def-text">{data.definition || <span className="loading-dots">Loading</span>}</div>
+           <div className="def-sub">{data.bengali}</div>
 
-                    {cardData.etymology && (
-                    <CollapsibleSection 
-                        title="Etymology" 
-                        isOpen={expandedSections.etymology} 
-                        onToggle={() => toggleSection('etymology')}
-                    >
-                        <p><InteractiveText text={cardData.etymology} onNavigate={handleInternalNavigate} /></p>
-                    </CollapsibleSection>
-                    )}
+           {data.family && data.family !== 'N/A' && (
+             <>
+                <div className="section-label">WORD FAMILY</div>
+                <div className="def-sub">{data.family}</div>
+             </>
+           )}
 
-                    {cardData.synonyms && (
-                    <CollapsibleSection 
-                        title="Synonyms" 
-                        isOpen={expandedSections.synonyms} 
-                        onToggle={() => toggleSection('synonyms')}
-                    >
-                        <p><InteractiveText text={cardData.synonyms} onNavigate={handleInternalNavigate} /></p>
-                    </CollapsibleSection>
-                    )}
+           <div className="section-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+              CONTEXT 
+              <button onClick={handleRefreshContext} style={{ color: 'var(--accent-primary)' }}>↻</button>
+           </div>
+           <div className="context-box">
+             "{data.context || '...'}"
+           </div>
 
-                    {cardData.antonyms && cardData.antonyms !== "N/A" && (
-                    <CollapsibleSection 
-                        title="Antonyms" 
-                        isOpen={expandedSections.antonyms} 
-                        onToggle={() => toggleSection('antonyms')}
-                    >
-                        <p><InteractiveText text={cardData.antonyms} onNavigate={handleInternalNavigate} /></p>
-                    </CollapsibleSection>
-                    )}
+           {(data.synonyms || data.antonyms) && (
+              <div style={{ marginTop: '1rem' }}>
+                <span className="section-label">SYNONYMS: </span>
+                <span className="def-sub">{data.synonyms}</span>
+              </div>
+           )}
 
-                    {cardData.usage && (
-                    <CollapsibleSection 
-                        title="Usage" 
-                        isOpen={expandedSections.usage} 
-                        onToggle={() => toggleSection('usage')}
-                        actionButton={
-                        <button className="refresh-icon" onClick={refreshUsage} title="Get another example">
-                            ↻
-                        </button>
-                        }
-                    >
-                        <p>"<InteractiveText text={cardData.usage} onNavigate={handleInternalNavigate} />"</p>
-                    </CollapsibleSection>
-                    )}
-
-                    {cardData.mnemonic && (
-                    <CollapsibleSection 
-                        title="Mnemonic" 
-                        isOpen={expandedSections.mnemonic} 
-                        onToggle={() => toggleSection('mnemonic')}
-                    >
-                        <p><InteractiveText text={cardData.mnemonic} onNavigate={handleInternalNavigate} /></p>
-                    </CollapsibleSection>
-                    )}
-
-                </div>
-                </div>
-            </div>
-            </div>
-        )}
-
-        {/* Controls Area (Only show if not empty) */}
-        {!isSavedEmpty && (
-            <div className="flashcard-controls">
-            {!isFlipped ? (
-                <button className="reveal-btn" onClick={() => setIsFlipped(true)} disabled={isLoading}>
-                Reveal
-                </button>
-            ) : (
-                mode === 'saved' ? (
-                <div className="srs-buttons simple">
-                    <button className="srs-btn dont-know" onClick={() => handleGrade('dont_know')}>Don't Know</button>
-                    <button className="srs-btn know" onClick={() => handleGrade('know')}>Know</button>
-                </div>
-                ) : (
-                <button className="next-btn" onClick={handleNext}>Next Word</button>
-                )
-            )}
-            </div>
-        )}
+           <div className="srs-actions">
+              <button className="action-btn btn-again" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'dont_know'); }}>
+                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                 Again
+              </button>
+              <button className="action-btn btn-got-it" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'know'); }}>
+                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                 Got it
+              </button>
+           </div>
+        </div>
       </div>
     </div>
   );
