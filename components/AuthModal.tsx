@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -89,11 +88,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
 
   if (userEmail) {
     return (
-      <div className="auth-overlay">
-        <div className="auth-container">
+      <div className="auth-overlay" onClick={onClose}>
+        <div className="auth-container" onClick={(e) => e.stopPropagation()}>
           <div className="auth-header">
             <h3>Account</h3>
-            <button onClick={onClose} className="close-button">✕</button>
+            <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
           </div>
           <div className="auth-body">
             <p style={{ color: 'var(--text-color-secondary)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>Signed in as:</p>
@@ -113,13 +112,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
   }
 
   return (
-    <div className="auth-overlay">
-      <div className="auth-container">
+    <div className="auth-overlay" onClick={onClose}>
+      <div className="auth-container" onClick={(e) => e.stopPropagation()}>
         <div className="auth-header">
           <h3>
             {isVerifying ? 'Enter Code' : (isLogin ? 'Welcome Back' : 'Create Account')}
           </h3>
-          <button onClick={onClose} className="close-button">✕</button>
+          <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
         </div>
         
         {message && (
@@ -152,7 +151,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
               onClick={() => setIsVerifying(false)}
               style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}
             >
-              Back to Sign Up
+              <span style={{ display: 'inline-block', marginRight: '4px' }}>&lt;</span> Back to Sign Up
             </button>
           </form>
         ) : (

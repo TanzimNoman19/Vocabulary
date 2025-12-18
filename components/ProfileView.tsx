@@ -12,9 +12,10 @@ interface ProfileViewProps {
   srsData: Record<string, SRSItem>;
   onSignOut: () => void;
   onLogin: () => void;
+  onOpenHistory: () => void;
 }
 
-const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, onSignOut, onLogin }) => {
+const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, onSignOut, onLogin, onOpenHistory }) => {
   const [showAuth, setShowAuth] = useState(false);
 
   const learningCount = Object.values(srsData).filter((i: SRSItem) => i.masteryLevel > 0 && i.masteryLevel < 5).length;
@@ -59,36 +60,43 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, on
                 </div>
             </div>
             
-            <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                    <span>Last Login</span>
-                    <span>{new Date().toLocaleDateString()}</span>
-                </div>
-            </div>
+            <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button 
+                  onClick={onOpenHistory}
+                  style={{
+                    width: '100%',
+                    padding: '1rem',
+                    borderRadius: '12px',
+                    background: 'var(--accent-secondary)',
+                    color: 'var(--accent-primary)',
+                    fontWeight: '700',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px'
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  VIEW HISTORY
+                </button>
 
-            <button 
-                onClick={user ? onSignOut : () => setShowAuth(true)}
-                style={{ 
-                    marginTop: '2rem', 
-                    width: '100%', 
-                    padding: '1rem', 
-                    borderRadius: '12px', 
-                    border: '1px solid var(--border-color)',
-                    fontWeight: '600'
-                }}
-            >
-                {user ? 'SIGN OUT' : 'LOG IN / SIGN UP'}
-            </button>
+                <button 
+                    onClick={user ? onSignOut : () => setShowAuth(true)}
+                    style={{ 
+                        width: '100%', 
+                        padding: '1rem', 
+                        borderRadius: '12px', 
+                        border: '1px solid var(--border-color)',
+                        fontWeight: '600',
+                        color: user ? 'var(--danger-color)' : 'var(--text-primary)'
+                    }}
+                >
+                    {user ? 'SIGN OUT' : 'LOG IN / SIGN UP'}
+                </button>
+            </div>
         </div>
 
-        {showAuth && (
-            <AuthModal 
-                onClose={() => setShowAuth(false)} 
-                onSignOut={() => {}}
-                userDisplayName={null}
-                userEmail={null}
-            />
-        )}
+        {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSignOut={() => {}} userDisplayName={null} userEmail={null} />}
     </div>
   );
 };

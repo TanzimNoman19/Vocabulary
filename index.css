@@ -1,3 +1,4 @@
+
 :root {
   /* Light Theme (Default) */
   --bg-color: #f8f9fc;
@@ -92,15 +93,15 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
+  padding: 1rem 1.2rem;
   z-index: 50;
   background: var(--bg-color);
-  height: 60px;
+  height: 70px;
 }
 
 .logo-text {
   font-weight: 800;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   background: linear-gradient(90deg, #5856d6 0%, #ff2d55 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -109,7 +110,58 @@ button {
 
 .header-actions {
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* AI Status Pill - Modern and Minimal */
+.ai-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 100px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  text-transform: uppercase;
+}
+
+.ai-status-pill .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ai-status-pill.available {
+  background: rgba(0, 200, 83, 0.08);
+  color: var(--success-color);
+  border-color: rgba(0, 200, 83, 0.12);
+}
+.ai-status-pill.available .dot {
+  box-shadow: 0 0 8px var(--success-color);
+}
+
+.ai-status-pill.exceeded {
+  background: rgba(255, 59, 48, 0.08);
+  color: var(--danger-color);
+  border-color: rgba(255, 59, 48, 0.12);
+}
+.ai-status-pill.exceeded .dot {
+  box-shadow: 0 0 8px var(--danger-color);
+}
+
+.ai-status-pill.checking {
+  background: rgba(255, 193, 7, 0.08);
+  color: var(--gold-color);
+  border-color: rgba(255, 193, 7, 0.12);
+}
+.ai-status-pill.checking .dot {
+  box-shadow: 0 0 8px var(--gold-color);
+  animation: pulse 1s infinite ease-in-out;
 }
 
 .icon-btn {
@@ -120,6 +172,7 @@ button {
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  background: transparent;
 }
 .icon-btn:hover {
   background: var(--accent-secondary);
@@ -280,6 +333,8 @@ button {
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--border-color);
   background: var(--card-bg);
+  display: flex;
+  justify-content: flex-end; /* Move button to the right */
 }
 
 /* External Actions */
@@ -321,7 +376,9 @@ button {
 
 .srs-actions { width: 100%; display: flex; justify-content: center; }
 .action-btn {
-  flex: 1; padding: 12px; border-radius: 16px; font-weight: 700;
+  flex: 0 0 auto; /* Allow content to dictate width */
+  min-width: 140px;
+  padding: 12px 20px; border-radius: 16px; font-weight: 700;
   font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }

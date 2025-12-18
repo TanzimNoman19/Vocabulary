@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect, useRef } from 'react';
-import { streamDefinition, generateUsageExample, getRandomWord, CardData, parseFlashcardResponse, getShortDefinition } from '../services/geminiService';
+// Fixed: Grade is exported from srsService, not geminiService
+import { streamDefinition, CardData, parseFlashcardResponse, getShortDefinition } from '../services/geminiService';
 import { Grade } from '../services/srsService';
 import InteractiveText from './InteractiveText';
 import WordTooltip from './WordTooltip';
@@ -18,10 +19,12 @@ interface FlashcardViewProps {
   onNavigate: (word: string) => void;
   onCacheUpdate: (word: string, data: CardData) => void;
   onOpenImport: () => void;
+  isQuotaExceeded: boolean;
+  setIsQuotaExceeded: (val: boolean) => void;
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({ 
-    topic, savedWords, srsData, cardCache, onUpdateSRS, onToggleSave, onNavigate, onCacheUpdate, onOpenImport
+    topic, savedWords, srsData, cardCache, onUpdateSRS, onToggleSave, onNavigate, onCacheUpdate, onOpenImport, isQuotaExceeded, setIsQuotaExceeded
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [data, setData] = useState<CardData>({
@@ -32,7 +35,10 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   const [tooltip, setTooltip] = useState<{ word: string, text: string, pos?: string, x: number, y: number } | null>(null);
 
   useEffect(() => {
-    if (topic && topic !== "__EMPTY_FALLBACK__") loadTopic(topic);
+    // Prevent rendering __RANDOM__ as a topic
+    if (topic && topic !== "__RANDOM__" && topic !== "__EMPTY_FALLBACK__") {
+        loadTopic(topic);
+    }
     setTooltip(null);
   }, [topic]);
 
@@ -42,6 +48,13 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
     if (!forceRefresh && cardCache[word]) {
         setData(cardCache[word]);
+        setIsLoading(false);
+        return;
+    }
+
+    // If quota is already known to be exceeded and not cached, don't even try
+    if (isQuotaExceeded) {
+        setData({ pos: 'Unavailable', ipa: '', definition: 'AI Quota exceeded. Browsing saved words.', bengali: 'সাময়িক বিরতি', family: '', context: '', synonyms: '', antonyms: '', difficulty: '' });
         setIsLoading(false);
         return;
     }
@@ -56,12 +69,22 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
         fullText += chunk;
       }
       if (activeTopic.current === word) {
+        if (fullText.includes("QUOTA_EXCEEDED") || fullText.includes("quota") || fullText.includes("429")) {
+            setIsQuotaExceeded(true);
+            // Trigger a re-navigation to a cached word if available
+            onNavigate('__RANDOM__');
+            return;
+        }
         const parsed = parseFlashcardResponse(fullText);
         setData(parsed);
         setIsLoading(false);
         onCacheUpdate(word, parsed);
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e.message?.includes('QUOTA_EXCEEDED')) {
+          setIsQuotaExceeded(true);
+          onNavigate('__RANDOM__');
+      }
       setIsLoading(false);
     }
   };
@@ -86,11 +109,16 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   if (topic === "__EMPTY_FALLBACK__") {
       return (
           <div className="flashcard-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
-              <div className="card-face card-front" style={{ position: 'relative', height: 'auto', minHeight: '300px' }}>
-                  <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📭</div>
-                  <h2 style={{ textAlign: 'center' }}>Knowledge Limit Reached</h2>
-                  <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '0 1.5rem' }}>
-                      The AI quota is exceeded and you have no saved words cached. Please import words manually to continue learning.
+              <div className="card-face card-front" style={{ position: 'relative', height: 'auto', minHeight: '350px', display: 'flex', flexDirection: 'column', padding: '2rem' }}>
+                  <div style={{ fontSize: '3.5rem', marginBottom: '1.5rem' }}>📭</div>
+                  <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Low on Vocabulary</h2>
+                  <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '0 1rem', lineHeight: '1.5', fontSize: '0.95rem' }}>
+                      {isQuotaExceeded 
+                        ? "The AI is resting and you have no saved words cached." 
+                        : "You haven't saved enough words yet to browse focused mix."}
+                  </p>
+                  <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '1rem' }}>
+                      Import a word list or use Search to add more.
                   </p>
                   <button className="auth-btn primary" style={{ marginTop: '2rem' }} onClick={onOpenImport}>
                       Bulk Import Words
@@ -119,7 +147,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
            <div className="word-display">{topic}</div>
            <div className="pos-tag">{data.pos || '...'}</div>
            <div className="status-badge">{isLearning ? 'LEARNING' : 'NEW'}</div>
-           <div className="tap-hint">Tap to flip</div>
+           <div className="tap-hint">{isLoading ? 'Loading...' : 'Tap to flip'}</div>
         </div>
 
         <div className="card-face card-back">

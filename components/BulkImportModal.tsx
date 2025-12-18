@@ -112,17 +112,18 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
             onClick={onClose} 
             aria-label="Close modal"
             style={{ 
-              fontSize: '1.5rem', 
+              fontSize: '1.6rem', 
               color: 'var(--text-secondary)',
-              padding: '4px 8px',
+              padding: '4px 12px',
               borderRadius: '8px',
               background: 'var(--accent-secondary)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              fontWeight: 300
             }}
           >
-            ✕
+            &lt;
           </button>
         </div>
         

@@ -163,7 +163,7 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
         <div className="story-container setup">
             <div className="story-header">
                 <h3>Story Mode</h3>
-                <button onClick={onClose} className="close-button">Exit</button>
+                <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
             </div>
             
             <div className="story-setup-content">
@@ -198,7 +198,7 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
       <div className="story-container reading">
         <div className="story-header">
             <h3>Chapter {state.currentIndex + 1}</h3>
-            <button onClick={onClose} className="close-button">Exit</button>
+            <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
         </div>
 
         <div className="story-content">
