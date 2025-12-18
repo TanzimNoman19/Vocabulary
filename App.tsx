@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getRandomWord, CardData, fetchFullDefinition, parseFlashcardResponse } from './services/geminiService';
-import { SRSItem, calculateSRS, initializeSRSItem } from './services/srsService';
+import { SRSItem, calculateSRS, initializeSRSItem, getDueWords } from './services/srsService';
 import { supabase, saveUserData, getUserData } from './services/supabaseClient';
 import FlashcardView from './components/FlashcardView';
 import SavedWordsList from './components/SavedWordsList';
@@ -13,6 +13,7 @@ import ProfileView from './components/ProfileView';
 import ChatInterface from './components/ChatInterface';
 import DiscoverySettings from './components/DiscoverySettings';
 import SearchBar from './components/SearchBar';
+import BulkImportModal from './components/BulkImportModal';
 
 type Tab = 'home' | 'saved' | 'search' | 'profile';
 
@@ -35,21 +36,23 @@ const App: React.FC = () => {
     return data ? JSON.parse(data) : {};
   });
 
-  // Card Cache State (Full Flashcard Data)
+  // Card Cache State
   const [cardCache, setCardCache] = useState<Record<string, CardData>>(() => {
     const cache = localStorage.getItem('cardCache');
     return cache ? JSON.parse(cache) : {};
   });
 
-  // Background Fetching Queue
+  // Quota Status
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+
+  // Background Queue
   const [wordQueue, setWordQueue] = useState<string[]>([]);
   const isFetchingRef = useRef(false);
 
   // UI State
   const [isDiscoveryOpen, setIsDiscoveryOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  
-  // Auth
   const [user, setUser] = useState<any>(null);
 
   // --- Effects ---
@@ -58,48 +61,52 @@ const App: React.FC = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Initial Random Word
   useEffect(() => {
     if (!currentTopic) handleRandom();
   }, []);
 
-  // Background Pre-fetching Effect
+  // Background Pre-fetching Effect (Only if API is up)
   useEffect(() => {
+    if (isQuotaExceeded) return;
+
     const replenishQueue = async () => {
-        // Maintain a small buffer of 2 words
         if (wordQueue.length < 2 && !isFetchingRef.current) {
             isFetchingRef.current = true;
             try {
                 const nextWord = await getRandomWord();
-                
-                // If we already have it in cache or it's already in queue, skip generating
-                if (cardCache[nextWord] || wordQueue.includes(nextWord)) {
-                   if (!wordQueue.includes(nextWord)) {
-                       setWordQueue(prev => [...prev, nextWord]);
-                   }
+                if (cardCache[nextWord]) {
+                   setWordQueue(prev => [...prev, nextWord]);
                 } else {
-                   // Generate data in background
                    const fullText = await fetchFullDefinition(nextWord);
+                   if (fullText.includes("quota") || fullText.includes("429")) {
+                       setIsQuotaExceeded(true);
+                       return;
+                   }
                    const parsedData = parseFlashcardResponse(fullText);
-                   
-                   // Update Cache and Queue
                    setCardCache(prev => ({ ...prev, [nextWord]: parsedData }));
                    setWordQueue(prev => [...prev, nextWord]);
                 }
             } catch (e) {
-                console.error("Background fetch failed", e);
+                // Silently check for quota
+                setIsQuotaExceeded(true);
             } finally {
                 isFetchingRef.current = false;
             }
         }
     };
 
-    // Check periodically or when queue changes
-    const timer = setTimeout(replenishQueue, 1000);
+    const timer = setTimeout(replenishQueue, 1500);
     return () => clearTimeout(timer);
-  }, [wordQueue, cardCache]);
+  }, [wordQueue, cardCache, isQuotaExceeded]);
 
-  // Sync with Supabase
+  // Sync Persistence
+  useEffect(() => {
+    localStorage.setItem('savedWords', JSON.stringify(savedWords));
+    localStorage.setItem('srsData', JSON.stringify(srsData));
+    localStorage.setItem('cardCache', JSON.stringify(cardCache));
+    if (user) saveUserData(user.id, { savedWords, srsData, cardCache });
+  }, [savedWords, srsData, cardCache, user]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -112,52 +119,43 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Persistence (LocalStorage & Cloud)
-  useEffect(() => {
-    localStorage.setItem('savedWords', JSON.stringify(savedWords));
-    localStorage.setItem('srsData', JSON.stringify(srsData));
-    localStorage.setItem('cardCache', JSON.stringify(cardCache));
-    
-    if (user) {
-        // Note: For a production app, cardCache should be in a separate table 
-        // as user_data column size might grow too large.
-        saveUserData(user.id, { savedWords, srsData, cardCache });
-    }
-  }, [savedWords, srsData, cardCache, user]);
-
   const loadDataFromSupabase = async (userId: string) => {
     const cloudData = await getUserData(userId);
     if (cloudData) {
         setSavedWords(cloudData.savedWords || []);
         setSrsData(cloudData.srsData || {});
-        if (cloudData.cardCache) {
-            // Merge cloud cache with local cache to avoid overwriting recent updates
-            setCardCache(prev => ({ ...prev, ...cloudData.cardCache }));
-        }
+        setCardCache(prev => ({ ...prev, ...(cloudData.cardCache || {}) }));
     }
   };
 
-  // --- Handlers ---
+  // --- Core Navigation Logic ---
   const handleRandom = async () => {
-      if (wordQueue.length > 0) {
-          // Use pre-fetched word
-          const next = wordQueue[0];
-          setWordQueue(prev => prev.slice(1));
-          setCurrentTopic(next);
-      } else {
-          // Fallback if queue empty
-          try {
-              const word = await getRandomWord();
-              setCurrentTopic(word);
-          } catch (e) {
-              setCurrentTopic("Serendipity");
+      // If API is up, try to get a new word
+      if (!isQuotaExceeded) {
+          if (wordQueue.length > 0) {
+              const next = wordQueue[0];
+              setWordQueue(prev => prev.slice(1));
+              setCurrentTopic(next);
+              return;
           }
+      }
+
+      // If API is down OR queue empty, try to show a saved word with a valid cache
+      const cachedSavedWords = savedWords.filter(w => cardCache[w]);
+      if (cachedSavedWords.length > 0) {
+          // Use SRS to pick the best due word from those that are cached
+          const dueCached = getDueWords(cachedSavedWords, srsData);
+          setCurrentTopic(dueCached[0] || cachedSavedWords[0]);
+      } else {
+          // Absolute fallback: We have no cached data and API is gone
+          setCurrentTopic("__EMPTY_FALLBACK__");
       }
   };
 
   const handleSearch = (word: string) => {
       setCurrentTopic(word);
-      setActiveTab('home'); // Switch to home to show the card
+      setActiveTab('home');
+      setIsQuotaExceeded(false); // Try resetting quota check on explicit search
   };
 
   const handleToggleSave = (word: string) => {
@@ -177,59 +175,72 @@ const App: React.FC = () => {
       const currentItem = srsData[word] || initializeSRSItem(word);
       const newItem = calculateSRS(currentItem, grade);
       setSrsData(prev => ({ ...prev, [word]: newItem }));
-      
-      // Auto-save if not saved
-      if (!savedWords.includes(word)) {
-          setSavedWords(prev => [word, ...prev]);
-      }
-      
-      // Fetch next word (using queue if available)
+      if (!savedWords.includes(word)) setSavedWords(prev => [word, ...prev]);
       handleRandom();
   };
 
-  const handleUpdateCache = (word: string, data: CardData) => {
-      setCardCache(prev => ({ ...prev, [word]: data }));
+  const handleBulkImport = (newWords: Record<string, CardData>) => {
+      setCardCache(prev => ({ ...prev, ...newWords }));
+      setSavedWords(prev => {
+          const wordsToAdd = Object.keys(newWords).filter(w => !prev.includes(w));
+          return [...wordsToAdd, ...prev];
+      });
+      setSrsData(prev => {
+          const updated = { ...prev };
+          Object.keys(newWords).forEach(w => {
+              if (!updated[w]) updated[w] = initializeSRSItem(w);
+          });
+          return updated;
+      });
+      // Navigate to first imported word
+      const firstWord = Object.keys(newWords)[0];
+      if (firstWord) handleSearch(firstWord);
   };
-
-  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   // --- Render ---
   return (
     <div className="app-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 1. Header */}
       <header className="app-header">
         <div className="logo-text">LexiFlow</div>
         <div className="header-actions">
-            <button className="icon-btn" onClick={() => setIsDiscoveryOpen(!isDiscoveryOpen)}>
+            <button 
+                className={`icon-btn ${isQuotaExceeded ? 'disabled' : ''}`} 
+                onClick={() => !isQuotaExceeded && setIsDiscoveryOpen(true)} 
+                title={isQuotaExceeded ? "Discovery restricted in local mode" : "Randomness Settings"}
+            >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+            </button>
+            <button className="icon-btn" onClick={() => setIsBulkImportOpen(true)} title="Bulk Import">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
             </button>
             <button className="icon-btn" onClick={() => setIsChatOpen(true)}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
             </button>
-            <button className="icon-btn" onClick={toggleTheme}>
-                {theme === 'light' ? 
-                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg> 
-                   : 
-                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-                }
+            <button className="icon-btn" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}>
+                {theme === 'light' ? '🌙' : '☀️'}
             </button>
         </div>
       </header>
 
-      {/* 2. Overlays */}
+      {isBulkImportOpen && <BulkImportModal onClose={() => setIsBulkImportOpen(false)} onImport={handleBulkImport} />}
       {isDiscoveryOpen && <DiscoverySettings onClose={() => setIsDiscoveryOpen(false)} />}
       
       {isChatOpen && (
           <ChatInterface 
             onClose={() => setIsChatOpen(false)} 
-            onNavigate={(word) => { setIsChatOpen(false); handleSearch(word); }}
+            onNavigate={handleSearch}
             savedWords={savedWords}
             setSavedWords={setSavedWords}
           />
       )}
 
-      {/* 3. Main Content */}
       <main className="main-content">
+        {isQuotaExceeded && activeTab === 'home' && currentTopic !== '__EMPTY_FALLBACK__' && (
+            <div style={{ background: 'var(--accent-secondary)', color: 'var(--accent-primary)', padding: '8px', fontSize: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>
+                LOCAL MODE: Browsing saved words while AI rests.
+            </div>
+        )}
+
         {activeTab === 'home' && (
             <FlashcardView 
                 topic={currentTopic} 
@@ -239,16 +250,13 @@ const App: React.FC = () => {
                 onUpdateSRS={handleSRSUpdate}
                 onToggleSave={handleToggleSave}
                 onNavigate={handleSearch}
-                onCacheUpdate={handleUpdateCache}
+                onCacheUpdate={(w, d) => setCardCache(prev => ({ ...prev, [w]: d }))}
+                onOpenImport={() => setIsBulkImportOpen(true)}
             />
         )}
         
         {activeTab === 'saved' && (
-            <SavedWordsList 
-                savedWords={savedWords} 
-                srsData={srsData} 
-                onNavigate={handleSearch}
-            />
+            <SavedWordsList savedWords={savedWords} srsData={srsData} onNavigate={handleSearch} />
         )}
         
         {activeTab === 'search' && (
@@ -262,13 +270,12 @@ const App: React.FC = () => {
                 user={user} 
                 savedCount={savedWords.length}
                 srsData={srsData}
-                onSignOut={() => { supabase.auth.signOut(); setUser(null); }}
-                onLogin={() => {/* handled inside ProfileView if needed, or simple redirect */}}
+                onSignOut={() => supabase.auth.signOut()}
+                onLogin={() => {}}
             />
         )}
       </main>
 
-      {/* 4. Bottom Nav */}
       <div className="bottom-nav-container">
         <nav className="bottom-nav">
             <button className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>

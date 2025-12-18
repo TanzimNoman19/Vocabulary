@@ -16,23 +16,24 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
   const [apiSuggestions, setApiSuggestions] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Debounce API calls
+  // Debounce API calls (using shorter delay for responsive Dictionary API)
   useEffect(() => {
     const timer = setTimeout(async () => {
-        if (query.trim().length >= 2) {
+        const trimmed = query.trim();
+        if (trimmed.length >= 2) {
             setIsSearching(true);
             try {
-                const results = await searchVocabulary(query);
+                const results = await searchVocabulary(trimmed);
                 setApiSuggestions(results);
             } catch (e) {
-                console.error(e);
+                console.error("Search failed", e);
             } finally {
                 setIsSearching(false);
             }
         } else {
             setApiSuggestions([]);
         }
-    }, 500); // 500ms delay
+    }, 250); // Faster debounce since Datamuse is quick
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -43,31 +44,37 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
   };
 
   const getSuggestions = () => {
-    if (!query) return [];
+    const trimmed = query.trim();
+    if (!trimmed) return [];
     
-    const lowerQuery = query.toLowerCase();
+    const lowerQuery = trimmed.toLowerCase();
     
     // 1. Saved Matches
     const savedMatches = savedWords.filter(w => w.toLowerCase().startsWith(lowerQuery));
 
-    // 2. Local Dictionary Matches
-    // Create a Set of saved words for quick exclusion
-    const savedSet = new Set(savedWords.map(w => w.toLowerCase()));
+    // 2. Dictionary API & Local Matches
+    // Use a Set to avoid duplicates
+    const seen = new Set(savedMatches.map(w => w.toLowerCase()));
+    const finalSuggestions: string[] = [...savedMatches];
+
+    // Combine API results and local Dictionary data
+    const combinedSource = [...apiSuggestions];
     
-    const localMatches = DICTIONARY_WORDS.filter(
-        w => w.toLowerCase().startsWith(lowerQuery) && !savedSet.has(w.toLowerCase())
-    ).slice(0, 5); // Limit local
+    // Add local dictionary matches if API has few results
+    if (combinedSource.length < 5) {
+        const localMatches = DICTIONARY_WORDS.filter(w => w.toLowerCase().startsWith(lowerQuery));
+        combinedSource.push(...localMatches);
+    }
 
-    // 3. API Matches
-    // Filter out words already in saved or local to avoid duplicates
-    const localSet = new Set(localMatches.map(w => w.toLowerCase()));
-    const validApiMatches = apiSuggestions.filter(
-        w => w.toLowerCase().startsWith(lowerQuery) && 
-             !savedSet.has(w.toLowerCase()) && 
-             !localSet.has(w.toLowerCase())
-    );
+    for (const word of combinedSource) {
+        if (!seen.has(word.toLowerCase())) {
+            finalSuggestions.push(word);
+            seen.add(word.toLowerCase());
+        }
+        if (finalSuggestions.length >= 10) break;
+    }
 
-    return [...savedMatches, ...localMatches, ...validApiMatches].slice(0, 10);
+    return finalSuggestions;
   };
 
   const suggestions = getSuggestions();
@@ -107,13 +114,13 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
                     </li>
                 );
             })}
-            {suggestions.length === 0 && query.length > 1 && !isSearching && (
+            {suggestions.length === 0 && query.trim().length > 1 && !isSearching && (
                  <li 
                     className="suggestion-item"
-                    onClick={() => onSearch(query)}
+                    onClick={() => onSearch(query.trim())}
                     style={{ color: 'var(--accent-primary)', fontStyle: 'italic' }}
                  >
-                    Search for "{query}"
+                    Search for "{query.trim()}"
                  </li>
             )}
         </ul>

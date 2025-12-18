@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import {GoogleGenAI, Tool, FunctionDeclaration, Type} from '@google/genai';
+import {GoogleGenAI, Tool, FunctionDeclaration, Type, Modality} from '@google/genai';
 import { DICTIONARY_WORDS } from './dictionaryData';
 
 // Initialize the client lazily or safely to prevent top-level crashes
@@ -21,9 +21,9 @@ const getAiClient = () => {
   return ai;
 };
 
-// Use standard flash model as default
-const textModelName = 'gemini-2.5-flash';
-const chatModelName = 'gemini-2.5-flash';
+// Use gemini-3-flash-preview as recommended in coding guidelines for basic text tasks
+const textModelName = 'gemini-3-flash-preview';
+const chatModelName = 'gemini-3-flash-preview';
 
 export interface CardData {
   pos: string;
@@ -122,35 +122,26 @@ export const createChatSession = () => {
 };
 
 /**
- * Searches for vocabulary words starting with the query string using Gemini.
+ * Searches for vocabulary words starting with the query string using the Datamuse API.
+ * This replaces Gemini for search suggestions to avoid quota issues and provide instant results.
  */
 export async function searchVocabulary(query: string): Promise<string[]> {
-  if (!process.env.API_KEY || query.length < 2) return [];
-  
-  const prompt = `List up to 6 English vocabulary words that start with "${query}". 
-  Return ONLY a JSON array of strings (e.g. ["Word1", "Word2"]). 
-  Do not explain.`;
+  const cleanQuery = query.trim();
+  if (cleanQuery.length < 2) return [];
   
   try {
-    const response = await getAiClient().models.generateContent({
-      model: textModelName,
-      contents: prompt,
-      config: { 
-        responseMimeType: 'application/json',
-        temperature: 0.3 
-      }
-    });
+    // Datamuse 'sug' endpoint is extremely fast and provides high-quality completions.
+    const response = await fetch(`https://api.datamuse.com/sug?s=${encodeURIComponent(cleanQuery)}&max=8`);
+    if (!response.ok) throw new Error('Search API failed');
     
-    const text = response.text;
-    if (!text) return [];
-    
-    return JSON.parse(text) as string[];
+    const data = await response.json();
+    return data.map((item: any) => item.word);
   } catch (error) {
-    // Silent fail on quota for search suggestions
-    if (!isQuotaError(error)) {
-        console.error("Search error", error);
-    }
-    return [];
+    // Fallback to local dictionary if external API is down
+    const lowerQuery = cleanQuery.toLowerCase();
+    return DICTIONARY_WORDS
+      .filter(w => w.toLowerCase().startsWith(lowerQuery))
+      .slice(0, 8);
   }
 }
 

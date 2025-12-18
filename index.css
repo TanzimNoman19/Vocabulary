@@ -119,10 +119,15 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 .icon-btn:hover {
   background: var(--accent-secondary);
+}
+.icon-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(1);
 }
 
 /* --- Main Content Layout --- */
