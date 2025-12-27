@@ -1,9 +1,10 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useState } from 'react';
-import { CardData } from '../services/geminiService';
+import { CardData } from '../services/dictionaryService';
 
 interface BulkImportModalProps {
   onClose: () => void;
@@ -24,20 +25,24 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
     "bengali": "ভাগ্যক্রমে ঘটা আনন্দদায়ক ঘটনা",
     "family": "serendipitous (adj)",
     "context": "Winning the lottery was a pure act of serendipity.",
-    "synonyms": "luck, fluke",
-    "antonyms": "misfortune",
+    "synonyms": "luck, fluke, providence",
+    "antonyms": "misfortune, bad luck",
+    "etymology": "Coined by Horace Walpole in 1754 from the Persian fairy tale 'The Three Princes of Serendip'.",
+    "usage_notes": "Commonly used in literature to describe unexpected scientific discoveries.",
     "difficulty": "Intermediate"
   },
   {
-    "word": "Ephemeral",
+    "word": "Pernicious",
     "pos": "adjective",
-    "ipa": "/əˈfemərəl/",
-    "definition": "Lasting for a very short time.",
-    "bengali": "ক্ষণস্থায়ী",
-    "family": "ephemerally (adv), ephemerality (noun)",
-    "context": "The beauty of a sunset is ephemeral, lasting only a few minutes.",
-    "synonyms": "fleeting, transitory",
-    "antonyms": "permanent, eternal",
+    "ipa": "/pərˈniSHəs/",
+    "definition": "Having a harmful effect, especially in a gradual or subtle way.",
+    "bengali": "অত্যন্ত ক্ষতিকারক",
+    "family": "perniciously (adv)",
+    "context": "The pernicious influences of social media can affect mental health.",
+    "synonyms": "harmful, damaging, destructive, inimical",
+    "antonyms": "beneficial, benign",
+    "etymology": "Derived from Latin 'perniciosus' meaning 'destructive'.",
+    "usage_notes": "Often used in political or social commentary regarding toxic ideologies.",
     "difficulty": "Advanced"
   }
 ]`;
@@ -59,7 +64,9 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
           context: item.context || '',
           synonyms: item.synonyms || '',
           antonyms: item.antonyms || '',
-          difficulty: item.difficulty || ''
+          difficulty: item.difficulty || '',
+          etymology: item.etymology || '',
+          usage_notes: item.usage_notes || ''
         };
       });
 
@@ -104,7 +111,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
       <div 
         className="auth-container" 
         style={{ maxWidth: '420px', width: '95%' }}
-        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+        onClick={(e) => e.stopPropagation()} 
       >
         <div className="auth-header">
           <h3>Bulk Import</h3>
@@ -128,7 +135,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
         </div>
         
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Paste a JSON array of words. You can generate this using an external AI tool.
+          Paste a JSON array of words. Enriched fields like Etymology and Usage Notes are now supported.
         </p>
 
         {error && (

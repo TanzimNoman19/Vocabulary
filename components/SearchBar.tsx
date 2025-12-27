@@ -1,26 +1,27 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect } from 'react';
 import { DICTIONARY_WORDS } from '../services/dictionaryData';
-import { searchVocabulary } from '../services/geminiService';
+import { searchVocabulary } from '../services/dictionaryService';
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
   savedWords: string[];
+  isOnline: boolean;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
+const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords, isOnline }) => {
   const [query, setQuery] = useState('');
   const [apiSuggestions, setApiSuggestions] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Debounce API calls (using shorter delay for responsive Dictionary API)
   useEffect(() => {
     const timer = setTimeout(async () => {
         const trimmed = query.trim();
-        if (trimmed.length >= 2) {
+        if (trimmed.length >= 2 && isOnline) {
             setIsSearching(true);
             try {
                 const results = await searchVocabulary(trimmed);
@@ -33,10 +34,10 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
         } else {
             setApiSuggestions([]);
         }
-    }, 250); // Faster debounce since Datamuse is quick
+    }, 250);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, isOnline]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,30 +49,29 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
     if (!trimmed) return [];
     
     const lowerQuery = trimmed.toLowerCase();
-    
-    // 1. Saved Matches
     const savedMatches = savedWords.filter(w => w.toLowerCase().startsWith(lowerQuery));
 
-    // 2. Dictionary API & Local Matches
-    // Use a Set to avoid duplicates
     const seen = new Set(savedMatches.map(w => w.toLowerCase()));
     const finalSuggestions: string[] = [...savedMatches];
 
-    // Combine API results and local Dictionary data
-    const combinedSource = [...apiSuggestions];
-    
-    // Add local dictionary matches if API has few results
-    if (combinedSource.length < 5) {
-        const localMatches = DICTIONARY_WORDS.filter(w => w.toLowerCase().startsWith(lowerQuery));
-        combinedSource.push(...localMatches);
-    }
-
-    for (const word of combinedSource) {
-        if (!seen.has(word.toLowerCase())) {
-            finalSuggestions.push(word);
-            seen.add(word.toLowerCase());
+    if (isOnline) {
+        for (const word of apiSuggestions) {
+            if (!seen.has(word.toLowerCase())) {
+                finalSuggestions.push(word);
+                seen.add(word.toLowerCase());
+            }
+            if (finalSuggestions.length >= 10) break;
         }
-        if (finalSuggestions.length >= 10) break;
+    } else {
+        // Local fallback when offline
+        const localMatches = DICTIONARY_WORDS.filter(w => w.toLowerCase().startsWith(lowerQuery));
+        for (const word of localMatches) {
+            if (!seen.has(word.toLowerCase())) {
+                finalSuggestions.push(word);
+                seen.add(word.toLowerCase());
+            }
+            if (finalSuggestions.length >= 10) break;
+        }
     }
 
     return finalSuggestions;
@@ -81,6 +81,11 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
 
   return (
     <div className="search-container">
+        {!isOnline && (
+            <div style={{ marginBottom: '1rem', padding: '10px', background: 'rgba(255, 59, 48, 0.1)', borderRadius: '12px', fontSize: '0.8rem', color: '#ff3b30', fontWeight: 600 }}>
+                ⚠️ You are offline. Searching your library and common words.
+            </div>
+        )}
         <form onSubmit={handleSubmit}>
             <div className="search-input-wrapper">
                 <span className="search-icon">
@@ -94,7 +99,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, savedWords }) => {
                     className="search-page-input"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search dictionary..."
+                    placeholder={isOnline ? "Search dictionary..." : "Search library..."}
                     autoFocus
                 />
             </div>

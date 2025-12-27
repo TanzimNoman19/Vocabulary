@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -13,9 +14,10 @@ interface ProfileViewProps {
   onSignOut: () => void;
   onLogin: () => void;
   onOpenHistory: () => void;
+  isOnline: boolean;
 }
 
-const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, onSignOut, onLogin, onOpenHistory }) => {
+const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, onSignOut, onLogin, onOpenHistory, isOnline }) => {
   const [showAuth, setShowAuth] = useState(false);
 
   const learningCount = Object.values(srsData).filter((i: SRSItem) => i.masteryLevel > 0 && i.masteryLevel < 5).length;
@@ -27,6 +29,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, on
     <div className="profile-view">
         <h2 style={{ marginBottom: '1.5rem', color: 'var(--accent-primary)' }}>Profile</h2>
         
+        {!isOnline && (
+            <div style={{ marginBottom: '1rem', padding: '12px', background: '#fff3cd', color: '#856404', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600, border: '1px solid #ffeeba' }}>
+                Offline: Cloud sync is disabled. Progress will be saved locally.
+            </div>
+        )}
+
         <div className="profile-card">
             <div className="avatar-circle">
                 {displayName[0].toUpperCase()}
@@ -34,7 +42,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, on
             
             <div className="account-label" style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>ACCOUNT</div>
             <h1 style={{ margin: '0.5rem 0', fontSize: '1.8rem' }}>{displayName}</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{user?.email || 'Not logged in'}</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{user?.email || (isOnline ? 'Sign in to sync with cloud' : 'Cloud sync unavailable offline')}</p>
 
             <div className="stats-grid">
                 <div className="stat-box">
@@ -82,21 +90,23 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, on
 
                 <button 
                     onClick={user ? onSignOut : () => setShowAuth(true)}
+                    disabled={!isOnline && !user}
                     style={{ 
                         width: '100%', 
                         padding: '1rem', 
                         borderRadius: '12px', 
                         border: '1px solid var(--border-color)',
                         fontWeight: '600',
-                        color: user ? 'var(--danger-color)' : 'var(--text-primary)'
+                        color: user ? 'var(--danger-color)' : 'var(--text-primary)',
+                        opacity: (!isOnline && !user) ? 0.5 : 1
                     }}
                 >
-                    {user ? 'SIGN OUT' : 'LOG IN / SIGN UP'}
+                    {user ? 'SIGN OUT' : (isOnline ? 'LOG IN / SIGN UP' : 'LOGIN UNAVAILABLE')}
                 </button>
             </div>
         </div>
 
-        {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSignOut={() => {}} userDisplayName={null} userEmail={null} />}
+        {showAuth && isOnline && <AuthModal onClose={() => setShowAuth(false)} onSignOut={() => {}} userDisplayName={null} userEmail={null} />}
     </div>
   );
 };

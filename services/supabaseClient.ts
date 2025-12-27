@@ -25,20 +25,26 @@ let isGlobalCacheAvailable = true;
  * Saves user-specific data (saved words, SRS, history, etc.)
  */
 export const saveUserData = async (userId: string, data: any) => {
-  const { error } = await supabase
-    .from('user_data')
-    .upsert(
-      { 
-        user_id: userId, 
-        data: data, 
-        updated_at: new Date().toISOString() 
-      }, 
-      { onConflict: 'user_id' }
-    );
-  
-  if (error) {
-    // If user_data table is also missing, we log once
-    console.error('Supabase error (user_data):', error.message);
+  try {
+    const { error } = await supabase
+      .from('user_data')
+      .upsert(
+        { 
+          user_id: userId, 
+          data: data, 
+          updated_at: new Date().toISOString() 
+        }, 
+        { onConflict: 'user_id' }
+      );
+    
+    if (error) {
+      // Only log if it's not a standard network failure
+      if (!error.message?.includes('fetch')) {
+        console.error('Supabase error (user_data):', error.message);
+      }
+    }
+  } catch (e) {
+    // Silent fail for network errors
   }
 };
 
@@ -46,23 +52,27 @@ export const saveUserData = async (userId: string, data: any) => {
  * Fetches user-specific data
  */
 export const getUserData = async (userId: string) => {
-  const { data, error } = await supabase
-    .from('user_data')
-    .select('data')
-    .eq('user_id', userId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('user_data')
+      .select('data')
+      .eq('user_id', userId)
+      .single();
 
-  if (error && error.code !== 'PGRST116') {
+    if (error && error.code !== 'PGRST116') {
+      return null;
+    }
+    return data?.data || null;
+  } catch (e) {
     return null;
   }
-  return data?.data || null;
 };
 
 /**
  * Global Cache for word definitions to share across all users.
  */
 export const getCachedDefinition = async (word: string) => {
-  if (!word || !isGlobalCacheAvailable) return null;
+  if (!word || !isGlobalCacheAvailable || !navigator.onLine) return null;
   
   try {
     const { data, error } = await supabase
@@ -81,6 +91,7 @@ export const getCachedDefinition = async (word: string) => {
     }
     return data?.data || null;
   } catch (e) {
+    // If fetch failed, assume network issue and return null silently
     return null;
   }
 };
@@ -89,7 +100,7 @@ export const getCachedDefinition = async (word: string) => {
  * Saves a generated definition to the global cache.
  */
 export const saveCachedDefinition = async (word: string, definitionData: any) => {
-  if (!word || !definitionData || !isGlobalCacheAvailable) return;
+  if (!word || !definitionData || !isGlobalCacheAvailable || !navigator.onLine) return;
 
   try {
     const { error } = await supabase
@@ -104,16 +115,20 @@ export const saveCachedDefinition = async (word: string, definitionData: any) =>
       );
     
     if (error) {
+      // Check for table missing error
       if (error.message?.includes('word_definitions') && (error.message?.includes('not find') || error.code === '42P01')) {
         isGlobalCacheAvailable = false;
         return;
       }
       
-      if (error.code !== '23505') { 
+      // Ignore duplicate key errors (23505) and generic fetch errors
+      const isNetworkError = error.message?.toLowerCase().includes('fetch');
+      if (error.code !== '23505' && !isNetworkError) { 
         console.error('Error caching definition:', error.message);
       }
     }
-  } catch (e) {
-    // Silent fail for background tasks
+  } catch (e: any) {
+    // Catch-all for TypeError: Failed to fetch and other browser-level network errors
+    // We treat these as silent failures because caching is an optimization, not a requirement.
   }
 };
