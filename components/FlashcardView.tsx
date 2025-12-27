@@ -123,8 +123,16 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   const isFavorite = favoriteWords.includes(topic);
   const srsItem = srsData[topic];
   const isLearning = srsItem && srsItem.masteryLevel > 0;
-  const synonymsList = data.synonyms && data.synonyms !== 'N/A' ? data.synonyms.split(',').map(s => s.trim()) : [];
-  const antonymsList = data.antonyms && data.antonyms !== 'N/A' ? data.antonyms.split(',').map(s => s.trim()) : [];
+  
+  // Robust parsing for chips
+  const parseList = (str: string) => {
+    if (!str || str === 'N/A') return [];
+    return str.split(',').map(s => s.trim()).filter(Boolean);
+  };
+
+  const synonymsList = parseList(data.synonyms);
+  const antonymsList = parseList(data.antonyms);
+  const familyList = parseList(data.family);
 
   return (
     <div className="flashcard-container" onClick={() => setTooltip(null)}>
@@ -189,6 +197,26 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                       <InteractiveText text={data.context || 'Generating example sentence...'} onWordClick={handleWordClick} />
                     </div>
                     </>
+                )}
+
+                {visibilitySettings.family && familyList.length > 0 && (
+                  <>
+                    <div className="section-label">WORD FAMILY</div>
+                    <div className="chip-container">
+                        {familyList.map(f => {
+                            const clean = f.replace(/\s*\([^)]*\)/g, '').trim();
+                            return (
+                                <span 
+                                    className="chip" 
+                                    key={f} 
+                                    onClick={(e) => { e.stopPropagation(); onNavigate(clean); }}
+                                >
+                                    {f}
+                                </span>
+                            );
+                        })}
+                    </div>
+                  </>
                 )}
 
                 {visibilitySettings.etymology && data.etymology && (

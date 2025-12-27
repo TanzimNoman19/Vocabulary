@@ -86,6 +86,7 @@ export async function fetchWordData(word: string, retries = 1): Promise<CardData
   const prompt = `Define the English word "${word}" for a vocabulary flashcard.
   Return a JSON object with the following keys:
   "pos", "ipa", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
+  For "family", provide a comma-separated list of related forms (e.g., for "abandon", "abandonment (n), abandoned (adj)").
   No markdown, just raw JSON.`;
 
   try {
