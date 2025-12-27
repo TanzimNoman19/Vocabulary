@@ -9,7 +9,15 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://oiegbafyoddklymbiuza.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9pZWdiYWZ5b2Rka2x5bWJpdXphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2NjAwMTAsImV4cCI6MjA4MDIzNjAxMH0.RFHTsIkGvqaW2TEBx6k8QF6egH0rqbaVNpeYMa4v7VM';
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Initialize Supabase Client with standard options
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce' 
+  }
+});
 
 export interface UserHistoryItem {
   word: string;
@@ -17,13 +25,32 @@ export interface UserHistoryItem {
 }
 
 /**
- * NOTE: To use global caching, you must create a table named 'word_definitions' 
- * with 'word' (text, primary key), 'data' (jsonb), and 'created_at' (timestamptz).
+ * Health check for the Supabase API.
+ * Uses the settings endpoint which is usually public.
  */
+export const checkSupabaseConnection = async (): Promise<boolean> => {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        
+        // Attempt to fetch a minimal endpoint to check project status
+        const response = await fetch(`${supabaseUrl}/auth/v1/health`, { 
+            method: 'GET',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        return response.ok;
+    } catch (e) {
+        console.error("Supabase connection check failed:", e);
+        return false;
+    }
+};
+
 let isGlobalCacheAvailable = true;
 
 /**
- * Saves user-specific data (saved words, SRS, history, etc.)
+ * Saves user-specific data to the cloud.
  */
 export const saveUserData = async (userId: string, data: any) => {
   if (!navigator.onLine) return;
@@ -40,18 +67,14 @@ export const saveUserData = async (userId: string, data: any) => {
         { onConflict: 'user_id' }
       );
     
-    if (error) {
-      if (!error.message?.includes('fetch')) {
-        console.warn('Supabase sync warning:', error.message);
-      }
+    if (error && !error.message?.includes('fetch')) {
+      console.warn('Sync error:', error.message);
     }
-  } catch (e) {
-    // Silent fail for network errors as it will sync automatically when connection returns
-  }
+  } catch (e) {}
 };
 
 /**
- * Fetches user-specific data with connectivity guard
+ * Loads user data from the cloud.
  */
 export const getUserData = async (userId: string) => {
   if (!navigator.onLine) return null;
@@ -63,8 +86,11 @@ export const getUserData = async (userId: string) => {
       .eq('user_id', userId)
       .single();
 
-    if (error && error.code !== 'PGRST116') {
-      return null;
+    if (error) {
+        if (error.code !== 'PGRST116') {
+            console.error('Data fetch error:', error);
+        }
+        return null;
     }
     return data?.data || null;
   } catch (e) {
@@ -73,7 +99,7 @@ export const getUserData = async (userId: string) => {
 };
 
 /**
- * Global Cache for word definitions to share across all users.
+ * Checks for a word definition in the global cache.
  */
 export const getCachedDefinition = async (word: string) => {
   if (!word || !isGlobalCacheAvailable || !navigator.onLine) return null;
@@ -86,7 +112,7 @@ export const getCachedDefinition = async (word: string) => {
       .single();
     
     if (error) {
-      if (error.message?.includes('word_definitions') && (error.message?.includes('not find') || error.code === '42P01')) {
+      if (error.code === '42P01') { 
         isGlobalCacheAvailable = false;
       }
       return null;
@@ -98,7 +124,7 @@ export const getCachedDefinition = async (word: string) => {
 };
 
 /**
- * Saves a generated definition to the global cache.
+ * Caches a word definition for all users to see.
  */
 export const saveCachedDefinition = async (word: string, definitionData: any) => {
   if (!word || !definitionData || !isGlobalCacheAvailable || !navigator.onLine) return;
@@ -115,8 +141,8 @@ export const saveCachedDefinition = async (word: string, definitionData: any) =>
         { onConflict: 'word' }
       );
     
-    if (error && error.code !== '23505' && !error.message?.toLowerCase().includes('fetch')) { 
-      console.warn('Cache write issue:', error.message);
+    if (error && error.code !== '23505') { 
+      console.warn('Cache save error:', error.message);
     }
   } catch (e: any) {}
 };

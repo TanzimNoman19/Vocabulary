@@ -3,7 +3,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CardData } from '../services/dictionaryService';
 
 interface BulkImportModalProps {
@@ -15,6 +15,27 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
   const [jsonInput, setJsonInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<'Copy Sample' | 'Copied!'>('Copy Sample');
+  const [summary, setSummary] = useState<{ total: number, unique: number } | null>(null);
+
+  useEffect(() => {
+    if (!jsonInput.trim()) {
+        setSummary(null);
+        setError(null);
+        return;
+    }
+    try {
+        const parsed = JSON.parse(jsonInput);
+        if (Array.isArray(parsed)) {
+            const uniqueWords = new Set(parsed.map((i: any) => i.word?.toLowerCase()).filter(Boolean));
+            setSummary({ total: parsed.length, unique: uniqueWords.size });
+            setError(null);
+        } else {
+            setSummary(null);
+        }
+    } catch (e) {
+        setSummary(null);
+    }
+  }, [jsonInput]);
 
   const sampleJson = `[
   {
@@ -55,7 +76,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
       const newCache: Record<string, CardData> = {};
       parsed.forEach((item: any) => {
         if (!item.word) return;
-        newCache[item.word] = {
+        const wordKey = item.word;
+        newCache[wordKey] = {
           pos: item.pos || '',
           ipa: item.ipa || '',
           definition: item.definition || '',
@@ -135,8 +157,25 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
         </div>
         
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Paste a JSON array of words. Enriched fields like Etymology and Usage Notes are now supported.
+          Paste a JSON array of words. Duplicates are automatically merged, preserving your SRS progress while updating definitions.
         </p>
+
+        {summary && (
+            <div style={{ 
+                background: 'var(--accent-secondary)', 
+                color: 'var(--accent-primary)', 
+                padding: '10px 14px', 
+                borderRadius: '12px', 
+                fontSize: '0.8rem', 
+                fontWeight: '700',
+                marginBottom: '1rem',
+                display: 'flex',
+                justifyContent: 'space-between'
+            }}>
+                <span>Detected: {summary.total} entries</span>
+                <span>{summary.unique} unique words</span>
+            </div>
+        )}
 
         {error && (
           <div style={{ 
@@ -154,7 +193,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
         <textarea 
           style={{
             width: '100%',
-            height: '200px',
+            height: '180px',
             background: 'var(--bg-color)',
             border: '1px solid var(--border-color)',
             borderRadius: '12px',
@@ -174,10 +213,10 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
           <button 
             className="auth-btn primary" 
             onClick={handleImport}
-            disabled={!jsonInput.trim()}
+            disabled={!jsonInput.trim() || !!error}
             style={{ padding: '16px' }}
           >
-            Import All Words
+            {summary ? `Import ${summary.unique} Words` : 'Import All Words'}
           </button>
           
           <button 

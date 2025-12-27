@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchWordData, CardData } from './services/dictionaryService';
 import { SRSItem, calculateSRS, initializeSRSItem, getDueWords } from './services/srsService';
 import { supabase, saveUserData, getUserData, UserHistoryItem } from './services/supabaseClient';
@@ -65,6 +65,19 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
 
+  const loadDataFromSupabase = useCallback(async (userId: string) => {
+    if (!navigator.onLine) return;
+    const cloudData = await getUserData(userId);
+    if (cloudData) {
+        setSavedWords(cloudData.savedWords || []);
+        setFavoriteWords(cloudData.favoriteWords || []);
+        setTrashedWords(cloudData.trashedWords || []);
+        setSrsData(cloudData.srsData || {});
+        setCardCache(prev => ({ ...prev, ...(cloudData.cardCache || {}) }));
+        setHistory(cloudData.history || []);
+    }
+  }, []);
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -98,27 +111,19 @@ const App: React.FC = () => {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user && isOnline) loadDataFromSupabase(session.user.id);
+      const activeUser = session?.user ?? null;
+      setUser(activeUser);
+      if (activeUser && isOnline) loadDataFromSupabase(activeUser.id);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user && isOnline) loadDataFromSupabase(session.user.id);
-    });
-    return () => subscription.unsubscribe();
-  }, [isOnline]);
 
-  const loadDataFromSupabase = async (userId: string) => {
-    const cloudData = await getUserData(userId);
-    if (cloudData) {
-        setSavedWords(cloudData.savedWords || []);
-        setFavoriteWords(cloudData.favoriteWords || []);
-        setTrashedWords(cloudData.trashedWords || []);
-        setSrsData(cloudData.srsData || {});
-        setCardCache(prev => ({ ...prev, ...(cloudData.cardCache || {}) }));
-        setHistory(cloudData.history || []);
-    }
-  };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const activeUser = session?.user ?? null;
+      setUser(activeUser);
+      if (activeUser && isOnline) loadDataFromSupabase(activeUser.id);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [isOnline, loadDataFromSupabase]);
 
   const handleRandom = () => {
       if (savedWords.length > 0) {
@@ -151,6 +156,50 @@ const App: React.FC = () => {
               if (!srsData[word]) setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
           }
       }
+  };
+
+  /**
+   * Smart merge for bulk imports
+   */
+  const handleImportWords = (importedCache: Record<string, CardData>) => {
+      const importedWordList = Object.keys(importedCache);
+      const existingWordSet = new Set(savedWords.map(w => w.toLowerCase()));
+      const trashedWordSet = new Set(trashedWords.map(w => w.toLowerCase()));
+      
+      const newWords: string[] = [];
+      const updatedWords: string[] = [];
+
+      importedWordList.forEach(word => {
+          const lowerWord = word.toLowerCase();
+          if (existingWordSet.has(lowerWord)) {
+              updatedWords.push(word);
+          } else {
+              newWords.push(word);
+              // If it was in trash, effectively restore it
+              if (trashedWordSet.has(lowerWord)) {
+                  setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
+              }
+          }
+      });
+
+      // 1. Update card cache for ALL words (refresh definitions)
+      setCardCache(prev => ({ ...prev, ...importedCache }));
+
+      // 2. Add truly NEW words to the library
+      if (newWords.length > 0) {
+          setSavedWords(prev => [...newWords, ...prev]);
+          
+          // 3. Initialize SRS for truly new words only
+          setSrsData(prev => {
+              const next = { ...prev };
+              newWords.forEach(w => {
+                  if (!next[w]) next[w] = initializeSRSItem(w);
+              });
+              return next;
+          });
+      }
+
+      console.log(`Import complete: ${newWords.length} new words, ${updatedWords.length} updated.`);
   };
 
   const handleMoveToTrash = (words: string[]) => {
@@ -219,7 +268,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {isBulkImportOpen && <BulkImportModal onClose={() => setIsBulkImportOpen(false)} onImport={(w) => { setCardCache(prev => ({...prev, ...w})); setSavedWords(p => [...Object.keys(w), ...p]); }} />}
+      {isBulkImportOpen && <BulkImportModal onClose={() => setIsBulkImportOpen(false)} onImport={handleImportWords} />}
       {isHistoryOpen && <HistoryView history={history} setHistory={setHistory} savedWords={savedWords} onToggleSave={handleToggleSave} onNavigate={handleSearch} onClose={() => setIsHistoryOpen(false)} cardCache={cardCache} />}
       {isSettingsOpen && <CardSettingsModal settings={visibilitySettings} onUpdate={setVisibilitySettings} onClose={() => setIsSettingsOpen(false)} />}
 
