@@ -49,8 +49,9 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         list = list.filter(word => {
             const item = srsData[word];
             const mastery = item?.masteryLevel || 0;
-            if (filter === 'new') return mastery === 0;
-            if (filter === 'learning') return mastery > 0 && mastery < 5;
+            const revCount = item?.reviewCount || 0;
+            if (filter === 'new') return revCount === 0;
+            if (filter === 'learning') return (mastery > 0 && mastery < 5) || (mastery === 0 && revCount > 0);
             if (filter === 'mastered') return mastery >= 5;
             return true;
         });
@@ -191,13 +192,20 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 const item = srsData[word];
                 const cache = cardCache[word];
                 const mastery = item?.masteryLevel || 0;
+                const revCount = item?.reviewCount || 0;
                 const isFaved = favoriteWords.includes(word);
                 const isSelected = selectedWords.has(word);
                 
                 let badgeClass = 'new';
                 let badgeText = 'NEW';
-                if (mastery >= 5) { badgeClass = 'mastered'; badgeText = 'MASTERED'; }
-                else if (mastery > 0) { badgeClass = 'learning'; badgeText = 'LEARNING'; }
+                if (mastery >= 5) { 
+                    badgeClass = 'mastered'; 
+                    badgeText = 'MASTERED'; 
+                }
+                else if (mastery > 0 || (mastery === 0 && revCount > 0)) { 
+                    badgeClass = 'learning'; 
+                    badgeText = revCount > 1 && mastery === 0 ? 'RE-LEARNING' : 'LEARNING'; 
+                }
 
                 return (
                     <div 

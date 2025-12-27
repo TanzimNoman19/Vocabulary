@@ -402,6 +402,23 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
               letter-spacing: 0.5px;
               text-transform: uppercase;
           }
+          
+          .auth-link-btn {
+            color: var(--accent-primary);
+            font-weight: 800;
+            text-decoration: underline;
+            background: rgba(88, 86, 214, 0.08);
+            padding: 4px 8px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .auth-link-btn:hover {
+            background: rgba(88, 86, 214, 0.15);
+            transform: translateY(-1px);
+          }
         `}</style>
       </div>
     );
@@ -493,8 +510,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
               {loading ? 'Connecting...' : (isLogin ? 'Sign In' : 'Sign Up')}
             </button>
 
-            <div className="auth-footer" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            <div className="auth-footer" style={{ marginTop: '2rem', textAlign: 'center' }}>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 {isLogin ? "New to LexiFlow? " : "Already registered? "}
                 <button 
                     type="button"
@@ -508,6 +525,24 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
           </form>
         )}
       </div>
+      <style>{`
+        .auth-link-btn {
+          color: var(--accent-primary);
+          font-weight: 800;
+          text-decoration: none;
+          background: rgba(88, 86, 214, 0.08);
+          padding: 6px 12px;
+          border-radius: 8px;
+          border: none;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .auth-link-btn:hover {
+          background: rgba(88, 86, 214, 0.15);
+          transform: translateY(-1px);
+        }
+      `}</style>
     </div>
   );
 };

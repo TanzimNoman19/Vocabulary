@@ -109,8 +109,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, cachedCount
             
             <div className="action-stack">
                 <button className="settings-trigger-btn" onClick={() => setShowAuth(true)}>
-                  <span className="btn-icon">⚙️</span>
-                  <span>{isGuest ? 'Account Settings' : 'Manage Account'}</span>
+                  <span className="btn-icon">{isGuest ? '🔑' : '⚙️'}</span>
+                  <span>{isGuest ? 'Sign In' : 'Account Settings'}</span>
                 </button>
             </div>
         </div>

@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -7,6 +8,7 @@ export interface SRSItem {
   word: string;
   masteryLevel: number; // 0 to 5
   nextReview: number; // Timestamp
+  reviewCount: number; // Number of times reviewed
 }
 
 export type Grade = 'know' | 'dont_know';
@@ -26,20 +28,25 @@ export const initializeSRSItem = (word: string): SRSItem => ({
   word,
   masteryLevel: 0,
   nextReview: Date.now(), // Due immediately
+  reviewCount: 0,
 });
 
 /**
- * Calculates the next review parameters based on Mastery Level logic.
+ * Calculates the next review parameters based on Spaced Repetition logic.
  */
 export const calculateSRS = (item: SRSItem, grade: Grade): SRSItem => {
-  let { masteryLevel } = item;
+  let { masteryLevel, reviewCount } = item;
+  
+  // Increment total review count
+  reviewCount += 1;
 
   if (grade === 'know') {
     // Increment level, max out at 5
     masteryLevel = Math.min(masteryLevel + 1, 5);
   } else {
-    // Reset to 0 if unknown
-    masteryLevel = 0;
+    // If it was already mastered (Level 5), move it to a learning level (Level 1)
+    // rather than resetting it completely to 0 (Re-learning).
+    masteryLevel = masteryLevel >= 5 ? 1 : 0;
   }
 
   const daysToAdd = INTERVALS[masteryLevel];
@@ -47,6 +54,7 @@ export const calculateSRS = (item: SRSItem, grade: Grade): SRSItem => {
   return {
     word: item.word,
     masteryLevel,
+    reviewCount,
     nextReview: Date.now() + (daysToAdd * DAY_IN_MS),
   };
 };
@@ -62,29 +70,15 @@ export const getDueWords = (words: string[], srsData: Record<string, SRSItem>): 
   });
 
   // 2. Shuffle (Fisher-Yates) to ensure randomness within same mastery level
-  // This prevents alphabetical ordering when multiple words have the same level.
   for (let i = due.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [due[i], due[j]] = [due[j], due[i]];
   }
 
   // 3. Sort primarily by lowest mastery level (hardest words first)
-  // Since sort is stable in modern JS, the shuffle order above is preserved for ties.
   return due.sort((a, b) => {
     const itemA = srsData[a] || initializeSRSItem(a);
     const itemB = srsData[b] || initializeSRSItem(b);
-    return itemA.masteryLevel - itemB.masteryLevel; // Ascending: 0 before 5
+    return itemA.masteryLevel - itemB.masteryLevel;
   });
-};
-
-export const getMasteryColor = (level: number): string => {
-  switch (level) {
-    case 0: return '#e0e0e0'; // Gray
-    case 1: return '#ffcdd2'; // Red-ish
-    case 2: return '#ffcc80'; // Orange
-    case 3: return '#fff9c4'; // Yellow
-    case 4: return '#c8e6c9'; // Light Green
-    case 5: return '#81c784'; // Green
-    default: return '#e0e0e0';
-  }
 };

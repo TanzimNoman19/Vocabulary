@@ -5,7 +5,7 @@
 */
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchWordData, CardData, getShortDefinition } from '../services/dictionaryService';
-import { Grade } from '../services/srsService';
+import { Grade, SRSItem } from '../services/srsService';
 import InteractiveText from './InteractiveText';
 import WordTooltip from './WordTooltip';
 import type { VisibilitySettings } from '../App';
@@ -14,7 +14,7 @@ interface FlashcardViewProps {
   topic: string;
   savedWords: string[];
   favoriteWords: string[];
-  srsData: Record<string, any>;
+  srsData: Record<string, SRSItem>;
   cardCache: Record<string, CardData>;
   onUpdateSRS: (word: string, grade: Grade) => void;
   onToggleSave: (word: string) => void;
@@ -122,7 +122,16 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
   const isFavorite = favoriteWords.includes(topic);
   const srsItem = srsData[topic];
-  const isLearning = srsItem && srsItem.masteryLevel > 0;
+  
+  // Logic to determine user-friendly status
+  const getStatusLabel = () => {
+    if (!srsItem || srsItem.reviewCount === 0) return 'NEW WORD';
+    if (srsItem.masteryLevel >= 5) return 'MASTERED';
+    if (srsItem.masteryLevel === 0 && srsItem.reviewCount > 0) return 'RE-LEARNING';
+    return 'LEARNING';
+  };
+
+  const statusLabel = getStatusLabel();
   
   // Robust parsing for chips
   const parseList = (str: string) => {
@@ -154,7 +163,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem', fontSize: '0.9rem' }}>{errorMsg}</p>
            ) : (
                <>
-                <div className="status-badge">{isLearning ? 'LEARNING' : 'NEW WORD'}</div>
+                <div className={`status-badge ${statusLabel.replace(' ', '-').toLowerCase()}`}>{statusLabel}</div>
                 <div className="tap-hint">{isLoading ? 'Fetching details...' : 'Tap to reveal details'}</div>
                </>
            )}
@@ -307,6 +316,10 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
           }
           .fav-btn:active {
             transform: scale(0.9);
+          }
+          .status-badge.re-learning {
+              background: #ffebee;
+              color: #d32f2f;
           }
           .synonyms-antonyms-container {
             display: flex;
