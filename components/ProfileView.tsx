@@ -14,12 +14,11 @@ interface ProfileViewProps {
   srsData: Record<string, SRSItem>;
   onSignOut: () => void;
   onLogin: () => void;
-  onOpenHistory: () => void;
   isOnline: boolean;
   onResetSRS: () => void;
 }
 
-const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, cachedCount, srsData, onSignOut, onLogin, onOpenHistory, isOnline, onResetSRS }) => {
+const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, cachedCount, srsData, onSignOut, onLogin, isOnline, onResetSRS }) => {
   const [showAuth, setShowAuth] = useState(false);
 
   const learningCount = Object.values(srsData).filter((i: SRSItem) => i.masteryLevel > 0 && i.masteryLevel < 5).length;
@@ -96,11 +95,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, cachedCount
             </div>
             
             <div className="action-stack">
-                <button className="primary-profile-btn" onClick={onOpenHistory}>
-                  <span className="btn-icon">🕒</span>
-                  <span>Review Word History</span>
-                </button>
-
                 <button className="secondary-profile-btn" onClick={() => setShowAuth(true)}>
                   <span className="btn-icon">⚙️</span>
                   <span>{user ? 'Manage Account' : 'Log In / Sign Up'}</span>
@@ -160,7 +154,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, cachedCount
           .stat-label { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
           
           .action-stack { display: flex; flex-direction: column; gap: 12px; }
-          .primary-profile-btn, .secondary-profile-btn {
+          .secondary-profile-btn {
               width: 100%;
               padding: 1.1rem;
               border-radius: 16px;
@@ -172,12 +166,11 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, cachedCount
               gap: 12px;
               transition: all 0.2s;
               border: none;
+              background: var(--card-bg); 
+              color: var(--text-primary); 
+              border: 1px solid var(--border-color); 
           }
-          .primary-profile-btn { background: var(--accent-primary); color: white; box-shadow: 0 4px 15px rgba(88, 86, 214, 0.2); }
-          .primary-profile-btn:active { transform: scale(0.98); box-shadow: 0 2px 8px rgba(88, 86, 214, 0.2); }
-          
-          .secondary-profile-btn { background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); }
-          .secondary-profile-btn:active { background: var(--bg-color); }
+          .secondary-profile-btn:active { background: var(--bg-color); transform: scale(0.98); }
           
           .btn-icon { font-size: 1.2rem; }
         `}</style>

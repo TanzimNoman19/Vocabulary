@@ -7,16 +7,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWordData, CardData } from './services/dictionaryService';
 import { SRSItem, calculateSRS, initializeSRSItem, getDueWords } from './services/srsService';
-import { supabase, saveUserData, getUserData, UserHistoryItem } from './services/supabaseClient';
+import { supabase, saveUserData, getUserData } from './services/supabaseClient';
 import FlashcardView from './components/FlashcardView';
 import SavedWordsList from './components/SavedWordsList';
 import ProfileView from './components/ProfileView';
-import SearchBar from './components/SearchBar';
 import BulkImportModal from './components/BulkImportModal';
-import HistoryView from './components/HistoryView';
 import CardSettingsModal from './components/CardSettingsModal';
+import TrashModal from './components/TrashModal';
 
-type Tab = 'home' | 'saved' | 'search' | 'profile';
+type Tab = 'home' | 'saved' | 'profile';
 
 export interface VisibilitySettings {
   ipa: boolean;
@@ -54,7 +53,6 @@ const App: React.FC = () => {
   const [trashedWords, setTrashedWords] = useState<string[]>(() => JSON.parse(localStorage.getItem('trashedWords') || '[]'));
   const [srsData, setSrsData] = useState<Record<string, SRSItem>>(() => JSON.parse(localStorage.getItem('srsData') || '{}'));
   const [cardCache, setCardCache] = useState<Record<string, CardData>>(() => JSON.parse(localStorage.getItem('cardCache') || '{}'));
-  const [history, setHistory] = useState<UserHistoryItem[]>(() => JSON.parse(localStorage.getItem('history') || '[]'));
 
   const [visibilitySettings, setVisibilitySettings] = useState<VisibilitySettings>(() => {
     const saved = localStorage.getItem('visibilitySettings');
@@ -62,8 +60,8 @@ const App: React.FC = () => {
   });
 
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
 
   // Background Sync Queue
@@ -112,7 +110,6 @@ const App: React.FC = () => {
         setTrashedWords(cloudData.trashedWords || []);
         setSrsData(cloudData.srsData || {});
         setCardCache(prev => ({ ...prev, ...(cloudData.cardCache || {}) }));
-        setHistory(cloudData.history || []);
     }
   }, []);
 
@@ -142,10 +139,9 @@ const App: React.FC = () => {
     localStorage.setItem('trashedWords', JSON.stringify(trashedWords));
     localStorage.setItem('srsData', JSON.stringify(srsData));
     localStorage.setItem('cardCache', JSON.stringify(cardCache));
-    localStorage.setItem('history', JSON.stringify(history));
     localStorage.setItem('visibilitySettings', JSON.stringify(visibilitySettings));
-    if (user && isOnline) saveUserData(user.id, { savedWords, favoriteWords, trashedWords, srsData, cardCache, history });
-  }, [savedWords, favoriteWords, trashedWords, srsData, cardCache, history, user, isOnline, visibilitySettings]);
+    if (user && isOnline) saveUserData(user.id, { savedWords, favoriteWords, trashedWords, srsData, cardCache });
+  }, [savedWords, favoriteWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -172,14 +168,13 @@ const App: React.FC = () => {
       }
   };
 
-  const handleSearch = (word: string) => {
+  const handleNavigate = (word: string) => {
       if (word === '__RANDOM__') {
           handleRandom();
       } else {
           setCurrentTopic(word);
       }
       setActiveTab('home');
-      setIsHistoryOpen(false);
   };
 
   const handleToggleSave = (word: string) => {
@@ -296,19 +291,46 @@ const App: React.FC = () => {
           {isSyncing && <div className="sync-spinner" title="Syncing library for offline use..."></div>}
         </div>
         <div className="header-actions">
-            {!isOnline && <span className="offline-badge-pill">LIMITED OFFLINE MODE</span>}
-            <button className="icon-btn" onClick={() => setIsSettingsOpen(true)} title="Card Settings">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1-1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            {!isOnline && <span className="offline-badge-pill">OFFLINE</span>}
+            
+            {activeTab === 'saved' && (
+              <div className="header-dynamic-actions" style={{ display: 'flex', gap: '8px' }}>
+                <button className="icon-btn header-import-btn" onClick={() => setIsBulkImportOpen(true)} title="Bulk Import JSON">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                </button>
+                <button className={`icon-btn header-trash-btn ${trashedWords.length > 0 ? 'not-empty' : ''}`} onClick={() => setIsTrashOpen(true)} title="View Trash">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
+            )}
+
+            <button className="icon-btn header-settings-btn" onClick={() => setIsSettingsOpen(true)} title="Card Settings">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1-1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
             </button>
-            <button className="icon-btn" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}>
-                {theme === 'light' ? '🌙' : '☀️'}
+            <button className="icon-btn header-theme-btn" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} title="Toggle Theme">
+                {theme === 'light' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                )}
             </button>
         </div>
       </header>
 
       {isBulkImportOpen && <BulkImportModal onClose={() => setIsBulkImportOpen(false)} onImport={handleImportWords} />}
-      {isHistoryOpen && <HistoryView history={history} setHistory={setHistory} savedWords={savedWords} onToggleSave={handleToggleSave} onNavigate={handleSearch} onClose={() => setIsHistoryOpen(false)} cardCache={cardCache} />}
       {isSettingsOpen && <CardSettingsModal settings={visibilitySettings} onUpdate={setVisibilitySettings} onClose={() => setIsSettingsOpen(false)} />}
+      {isTrashOpen && (
+          <TrashModal 
+            trashedWords={trashedWords} 
+            cardCache={cardCache}
+            onClose={() => setIsTrashOpen(false)} 
+            onRestore={handleRestoreFromTrash} 
+            onPermanentDelete={handlePermanentDelete}
+          />
+      )}
 
       <main className="main-content">
         {!isOnline && (
@@ -318,33 +340,82 @@ const App: React.FC = () => {
         )}
         
         {activeTab === 'home' && (
-            <FlashcardView topic={currentTopic} savedWords={savedWords} favoriteWords={favoriteWords} srsData={srsData} cardCache={cardCache} onUpdateSRS={handleSRSUpdate} onToggleSave={handleToggleSave} onToggleFavorite={handleToggleFavorite} onNavigate={handleSearch} onCacheUpdate={(w, d) => setCardCache(prev => ({ ...prev, [w]: d }))} onOpenImport={() => setIsBulkImportOpen(true)} isOnline={isOnline} visibilitySettings={visibilitySettings} />
+            <FlashcardView topic={currentTopic} savedWords={savedWords} favoriteWords={favoriteWords} srsData={srsData} cardCache={cardCache} onUpdateSRS={handleSRSUpdate} onToggleSave={handleToggleSave} onToggleFavorite={handleToggleFavorite} onNavigate={handleNavigate} onCacheUpdate={(w, d) => setCardCache(prev => ({ ...prev, [w]: d }))} onOpenImport={() => setIsBulkImportOpen(true)} isOnline={isOnline} visibilitySettings={visibilitySettings} />
         )}
-        {activeTab === 'saved' && <SavedWordsList savedWords={savedWords} favoriteWords={favoriteWords} trashedWords={trashedWords} srsData={srsData} cardCache={cardCache} onNavigate={handleSearch} onDeleteMultiple={handleMoveToTrash} onRestoreFromTrash={handleRestoreFromTrash} onPermanentDelete={handlePermanentDelete} />}
-        {activeTab === 'search' && <div className="search-view"><SearchBar onSearch={handleSearch} savedWords={savedWords} isOnline={isOnline} /></div>}
-        {activeTab === 'profile' && <ProfileView user={user} savedCount={savedWords.length} cachedCount={cachedCount} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} onOpenHistory={() => setIsHistoryOpen(true)} isOnline={isOnline} onResetSRS={handleResetSRS} />}
+        {activeTab === 'saved' && (
+            <SavedWordsList 
+                savedWords={savedWords} 
+                favoriteWords={favoriteWords} 
+                trashedWords={trashedWords} 
+                srsData={srsData} 
+                cardCache={cardCache} 
+                onNavigate={handleNavigate} 
+                onDeleteMultiple={handleMoveToTrash} 
+                onRestoreFromTrash={handleRestoreFromTrash} 
+                onPermanentDelete={handlePermanentDelete} 
+                onOpenImport={() => setIsBulkImportOpen(true)}
+            />
+        )}
+        {activeTab === 'profile' && <ProfileView user={user} savedCount={savedWords.length} cachedCount={cachedCount} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} isOnline={isOnline} onResetSRS={handleResetSRS} />}
       </main>
 
       <div className="bottom-nav-container">
         <nav className="bottom-nav">
+            {/* Sliding Liquid Indicator */}
+            <div className={`nav-indicator pos-${activeTab}`} />
+            
             <button className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-                {activeTab === 'home' && <span>Study</span>}
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                <span>Study</span>
             </button>
             <button className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`} onClick={() => setActiveTab('saved')}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-                {activeTab === 'saved' && <span>Library</span>}
-            </button>
-            <button className={`nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                {activeTab === 'search' && <span>Search</span>}
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                <span>Library</span>
             </button>
             <button className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                {activeTab === 'profile' && <span>Profile</span>}
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span>Profile</span>
             </button>
         </nav>
       </div>
+
+      <style>{`
+        .icon-btn {
+          width: 40px;
+          height: 40px;
+          background: var(--accent-secondary);
+          color: var(--text-primary);
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          border: 1px solid transparent;
+          flex-shrink: 0;
+        }
+        .icon-btn:hover {
+          background: var(--border-color);
+          border-color: var(--accent-primary);
+        }
+        .icon-btn:active {
+          transform: scale(0.92);
+          background: var(--accent-secondary);
+        }
+        .header-trash-btn.not-empty {
+          position: relative;
+        }
+        .header-trash-btn.not-empty::after {
+          content: '';
+          position: absolute;
+          top: 6px;
+          right: 6px;
+          width: 8px;
+          height: 8px;
+          background: var(--danger-color);
+          border-radius: 50%;
+          border: 2.5px solid var(--bg-color);
+        }
+      `}</style>
     </div>
   );
 };

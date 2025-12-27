@@ -3,10 +3,9 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { SRSItem } from '../services/srsService';
 import { CardData } from '../services/dictionaryService';
-import TrashModal from './TrashModal';
 
 interface SavedWordsListProps {
   savedWords: string[];
@@ -18,6 +17,7 @@ interface SavedWordsListProps {
   onDeleteMultiple: (words: string[]) => void;
   onRestoreFromTrash: (words: string[]) => void;
   onPermanentDelete: (words: string[]) => void;
+  onOpenImport: () => void;
 }
 
 type SortType = 'alpha' | 'time';
@@ -25,23 +25,17 @@ type SortOrder = 'asc' | 'desc';
 type MasteryFilter = 'all' | 'new' | 'learning' | 'mastered';
 
 const SavedWordsList: React.FC<SavedWordsListProps> = ({ 
-    savedWords, favoriteWords, trashedWords, srsData, cardCache, onNavigate, onDeleteMultiple, onRestoreFromTrash, onPermanentDelete
+    savedWords, favoriteWords, trashedWords, srsData, cardCache, onNavigate, onDeleteMultiple, onRestoreFromTrash, onPermanentDelete, onOpenImport
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
   const [sortBy, setSortBy] = useState<SortType>('time');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filter, setFilter] = useState<MasteryFilter>('all');
-  const [isTrashOpen, setIsTrashOpen] = useState(false);
   
   // Selection Mode State
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
   const longPressTimer = useRef<number | null>(null);
-
-  // Swipe State
-  const [swipingWord, setSwipingWord] = useState<string | null>(null);
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const touchStart = useRef({ x: 0, y: 0 });
 
   // Undo Snackbar State
   const [lastTrashed, setLastTrashed] = useState<string[] | null>(null);
@@ -68,7 +62,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         } else {
             const idxA = savedWords.indexOf(a);
             const idxB = savedWords.indexOf(b);
-            // Default newest first (desc)
             return sortOrder === 'asc' ? idxB - idxA : idxA - idxB;
         }
     });
@@ -87,13 +80,12 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
   };
 
   const startLongPress = (word: string, e: React.PointerEvent) => {
-    if (swipingWord || selectionMode) return;
-    touchStart.current = { x: e.clientX, y: e.clientY };
+    if (selectionMode) return;
     longPressTimer.current = window.setTimeout(() => {
         setSelectionMode(true);
         toggleSelection(word);
         if ('vibrate' in navigator) navigator.vibrate(50);
-    }, 500);
+    }, 600);
   };
 
   const cancelLongPress = () => {
@@ -106,7 +98,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
   const handleItemClick = (word: string) => {
     if (selectionMode) {
         toggleSelection(word);
-    } else if (!swipingWord) {
+    } else {
         onNavigate(word);
     }
   };
@@ -130,51 +122,11 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     }
   };
 
-  // Swipe logic
-  const onTouchStart = (word: string, e: React.TouchEvent | React.MouseEvent) => {
-    if (selectionMode) return;
-    const clientX = 'touches' in e ? (e as any).touches[0].clientX : (e as React.MouseEvent).clientX;
-    touchStart.current = { x: clientX, y: 0 };
-    setSwipingWord(word);
-  };
-
-  const onTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
-    if (!swipingWord || selectionMode) return;
-    const clientX = 'touches' in e ? (e as any).touches[0].clientX : (e as React.MouseEvent).clientX;
-    const diffX = clientX - touchStart.current.x;
-    if (diffX < 0) setSwipeOffset(Math.max(-100, diffX));
-    else setSwipeOffset(0);
-  };
-
-  const onTouchEnd = () => {
-    if (!swipingWord) return;
-    if (swipeOffset < -70) {
-        const word = swipingWord;
-        setLastTrashed([word]);
-        onDeleteMultiple([word]);
-        if (undoTimeout.current) clearTimeout(undoTimeout.current);
-        undoTimeout.current = window.setTimeout(() => setLastTrashed(null), 5000);
-    }
-    setSwipingWord(null);
-    setSwipeOffset(0);
-  };
-
   return (
-    <div className="saved-list-view" onMouseUp={onTouchEnd} onTouchEnd={onTouchEnd}>
-      {isTrashOpen && (
-          <TrashModal 
-            trashedWords={trashedWords} 
-            cardCache={cardCache}
-            onClose={() => setIsTrashOpen(false)} 
-            onRestore={onRestoreFromTrash} 
-            onPermanentDelete={onPermanentDelete}
-          />
-      )}
-
-      {/* Selection Overlay */}
+    <div className="saved-list-view">
       {selectionMode && (
           <div className="selection-bar">
-              <button className="icon-btn" onClick={() => { setSelectionMode(false); setSelectedWords(new Set()); }}>
+              <button className="icon-btn-selection" onClick={() => { setSelectionMode(false); setSelectedWords(new Set()); }}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
               <div style={{ flex: 1, fontWeight: 800 }}>{selectedWords.size} Selected</div>
@@ -184,7 +136,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
               }}>
                   {selectedWords.size === filteredAndSortedList.length ? 'NONE' : 'ALL'}
               </button>
-              <button className="icon-btn danger-fill" onClick={handleBatchMoveToTrash}>
+              <button className="icon-btn-selection danger-fill" onClick={handleBatchMoveToTrash}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
           </div>
@@ -199,9 +151,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                   FAVORITES ({favoriteWords.length})
               </button>
           </div>
-          <button className={`icon-btn trash-btn ${trashedWords.length > 0 ? 'not-empty' : ''}`} onClick={() => setIsTrashOpen(true)}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          </button>
       </div>
 
       <div className="filter-sort-bar">
@@ -210,13 +159,13 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 className={sortBy === 'time' ? 'active' : ''} 
                 onClick={() => { if (sortBy === 'time') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else setSortBy('time'); }}
               >
-                  TIME {sortBy === 'time' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  RECENT {sortBy === 'time' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
               <button 
                 className={sortBy === 'alpha' ? 'active' : ''} 
                 onClick={() => { if (sortBy === 'alpha') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else setSortBy('alpha'); }}
               >
-                  A-Z {sortBy === 'alpha' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  ALPHABET {sortBy === 'alpha' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
           </div>
           <div className="filter-chips">
@@ -230,7 +179,12 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         {filteredAndSortedList.length === 0 ? (
             <div className="empty-state">
                 <div className="icon">{activeTab === 'all' ? '📚' : '❤️'}</div>
-                <p>{filter === 'all' ? 'Your library is empty.' : 'No matches.'}</p>
+                <p>{filter === 'all' ? 'Your library is empty.' : 'No matches found.'}</p>
+                {filter === 'all' && activeTab === 'all' && (
+                  <button className="auth-btn primary" style={{ marginTop: '1rem' }} onClick={onOpenImport}>
+                    Bulk Import JSON
+                  </button>
+                )}
             </div>
         ) : (
             filteredAndSortedList.map(word => {
@@ -239,7 +193,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 const mastery = item?.masteryLevel || 0;
                 const isFaved = favoriteWords.includes(word);
                 const isSelected = selectedWords.has(word);
-                const isSwiping = swipingWord === word;
                 
                 let badgeClass = 'new';
                 let badgeText = 'NEW';
@@ -247,44 +200,46 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 else if (mastery > 0) { badgeClass = 'learning'; badgeText = 'LEARNING'; }
 
                 return (
-                    <div key={word} className="swipe-container">
-                        <div className="swipe-bg">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <div 
+                      key={word} 
+                      className={`modern-word-card ${isSelected ? 'selected' : ''} ${selectionMode ? 'selection-active' : ''}`}
+                      onClick={() => handleItemClick(word)}
+                      onPointerDown={(e) => startLongPress(word, e)}
+                      onPointerUp={cancelLongPress}
+                      onPointerLeave={cancelLongPress}
+                      onContextMenu={(e) => e.preventDefault()}
+                    >
+                        {selectionMode && (
+                            <div className={`checkbox ${isSelected ? 'checked' : ''}`}>
+                                {isSelected && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                            </div>
+                        )}
+                        
+                        <div className="card-info">
+                            <div className="card-top-row">
+                                <span className="word-title">{word}</span>
+                                <div className="card-indicators">
+                                    {isFaved && <span className="fav-indicator">❤️</span>}
+                                    <span className={`mastery-pill ${badgeClass}`}>{badgeText}</span>
+                                </div>
+                            </div>
+                            <p className="word-snippet">{cache ? cache.definition : 'AI details loading...'}</p>
+                            
+                            <div className="mastery-progress-bar">
+                                {[1, 2, 3, 4, 5].map(step => (
+                                    <div 
+                                        key={step} 
+                                        className={`progress-dot ${mastery >= step ? 'filled' : ''} ${mastery >= 5 ? 'mastered' : ''}`}
+                                    />
+                                ))}
+                            </div>
                         </div>
 
-                        <div 
-                          className={`word-card-row ${isSelected ? 'selected' : ''} ${selectionMode ? 'selection-active' : ''}`}
-                          style={{ transform: isSwiping ? `translateX(${swipeOffset}px)` : 'none' }}
-                          onClick={() => handleItemClick(word)}
-                          onPointerDown={(e) => startLongPress(word, e)}
-                          onPointerUp={cancelLongPress}
-                          onPointerLeave={cancelLongPress}
-                          onMouseDown={(e) => onTouchStart(word, e)}
-                          onTouchStart={(e) => onTouchStart(word, e)}
-                          onMouseMove={(e) => isSwiping && onTouchMove(e)}
-                          onTouchMove={(e) => isSwiping && onTouchMove(e)}
-                          onContextMenu={(e) => e.preventDefault()}
-                        >
-                            {selectionMode && (
-                                <div className={`checkbox ${isSelected ? 'checked' : ''}`}>
-                                    {isSelected && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"></polyline></svg>}
-                                </div>
-                            )}
-                            
-                            <div className="row-content">
-                                <h3>
-                                    {word}
-                                    {!selectionMode && <span className={`mini-badge ${badgeClass}`}>{badgeText}</span>}
-                                    {isFaved && !selectionMode && <span className="row-fav-icon">❤️</span>}
-                                </h3>
-                                <p className="row-def">{cache ? cache.definition : 'Loading...'}</p>
+                        {!selectionMode && (
+                            <div className="arrow-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
                             </div>
-                            {!selectionMode && (
-                                <div className="row-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                </div>
-                            )}
-                        </div>
+                        )}
                     </div>
                 );
             })
@@ -293,49 +248,100 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
 
       {lastTrashed && (
           <div className="modern-snackbar">
-              <span className="snackbar-msg">Moved {lastTrashed.length} {lastTrashed.length === 1 ? 'word' : 'words'} to Trash</span>
+              <span className="snackbar-msg">Deleted {lastTrashed.length} {lastTrashed.length === 1 ? 'word' : 'words'}</span>
               <button className="snackbar-undo" onClick={handleUndoTrash}>UNDO</button>
           </div>
       )}
 
       <style>{`
-        .list-tabs-container { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; padding: 0 4px; }
-        .list-tabs { flex: 1; display: flex; gap: 4px; background: var(--accent-secondary); padding: 4px; border-radius: 12px; }
-        .list-tabs button { flex: 1; padding: 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); transition: all 0.2s; }
-        .list-tabs button.active { background: var(--card-bg); color: var(--accent-primary); box-shadow: var(--shadow-sm); }
+        .list-tabs-container { display: flex; align-items: center; gap: 12px; margin-bottom: 1.2rem; padding: 0 4px; }
+        .list-tabs { flex: 1; display: flex; gap: 6px; background: var(--accent-secondary); padding: 5px; border-radius: 16px; }
+        .list-tabs button { flex: 1; padding: 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .list-tabs button.active { background: var(--card-bg); color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.1); }
         .list-tabs button.active.fav { color: #ff2d55; }
         
-        .trash-btn { width: 44px; height: 44px; background: var(--accent-secondary); color: var(--text-secondary); position: relative; border-radius: 12px; }
-        .trash-btn.not-empty { color: var(--accent-primary); }
-        .trash-btn.not-empty::after { content: ''; position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; background: var(--danger-color); border-radius: 50%; border: 2px solid var(--accent-secondary); }
-
-        .filter-sort-bar { margin: 0 4px 1.2rem 4px; display: flex; flex-direction: column; gap: 12px; }
-        .sort-toggles { display: flex; gap: 8px; }
-        .sort-toggles button { font-size: 0.7rem; font-weight: 700; padding: 8px 14px; border-radius: 10px; background: var(--accent-secondary); color: var(--accent-primary); }
-        .sort-toggles button.active { background: var(--accent-primary); color: white; }
-        .filter-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
-        .chip { white-space: nowrap; font-size: 0.65rem; font-weight: 800; padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border-color); color: var(--text-secondary); }
+        .filter-sort-bar { margin: 0 4px 1.5rem 4px; display: flex; flex-direction: column; gap: 14px; }
+        .sort-toggles { display: flex; gap: 10px; }
+        .sort-toggles button { font-size: 0.65rem; font-weight: 800; padding: 10px 16px; border-radius: 12px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); letter-spacing: 0.5px; }
+        .sort-toggles button.active { background: var(--accent-primary); color: white; border-color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); }
+        
+        .filter-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+        .filter-chips::-webkit-scrollbar { display: none; }
+        .chip { white-space: nowrap; font-size: 0.65rem; font-weight: 800; padding: 8px 18px; border-radius: 20px; border: 1.5px solid var(--border-color); color: var(--text-muted); background: transparent; transition: all 0.2s; }
         .chip.active { background: var(--text-primary); color: var(--bg-color); border-color: var(--text-primary); }
 
-        .words-scroll-list { display: flex; flex-direction: column; gap: 0.8rem; padding: 0 4px; }
-        .swipe-container { position: relative; overflow: hidden; border-radius: 16px; }
-        .swipe-bg { position: absolute; right: 0; top: 0; height: 100%; width: 100px; background: var(--danger-color); color: white; display: flex; align-items: center; justify-content: flex-end; padding-right: 25px; border-radius: 16px; z-index: 1; }
-        .word-card-row { position: relative; z-index: 2; background: var(--card-bg); transition: transform 0.15s ease-out, background 0.2s; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); padding: 1.2rem; display: flex; align-items: center; }
-        .word-card-row.selected { background: var(--accent-secondary); border-color: var(--accent-primary); transform: scale(0.98); }
-        .row-fav-icon { margin-left: 6px; font-size: 0.8rem; color: #ff2d55; }
+        .words-scroll-list { display: flex; flex-direction: column; gap: 0.75rem; padding: 0 4px; }
+        
+        .modern-word-card { 
+            background: var(--card-bg); 
+            border-radius: 20px; 
+            padding: 1.25rem; 
+            display: flex; 
+            align-items: center; 
+            gap: 1rem;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            cursor: pointer;
+        }
+        .modern-word-card:active { transform: scale(0.98); background: var(--bg-color); }
+        .modern-word-card.selected { background: var(--accent-secondary); border-color: var(--accent-primary); }
+        
+        .card-info { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+        .card-top-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        .word-title { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.3px; }
+        
+        .card-indicators { display: flex; align-items: center; gap: 6px; }
+        .fav-indicator { font-size: 0.8rem; }
+        
+        .mastery-pill { 
+            font-size: 0.6rem; 
+            padding: 3px 8px; 
+            border-radius: 6px; 
+            font-weight: 800; 
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .mastery-pill.new { background: var(--accent-secondary); color: var(--accent-primary); }
+        .mastery-pill.learning { background: rgba(255, 193, 7, 0.1); color: #f57f17; }
+        .mastery-pill.mastered { background: rgba(0, 200, 83, 0.1); color: #2e7d32; }
+        
+        .word-snippet { 
+            font-size: 0.8rem; 
+            color: var(--text-secondary); 
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin: 2px 0 6px 0;
+        }
+        
+        .mastery-progress-bar { display: flex; gap: 4px; margin-top: 4px; }
+        .progress-dot { width: 14px; height: 4px; border-radius: 2px; background: var(--border-color); transition: all 0.3s; }
+        .progress-dot.filled { background: var(--accent-primary); }
+        .progress-dot.mastered { background: var(--success-color); }
+        
+        .arrow-icon { color: var(--text-muted); opacity: 0.5; }
 
-        .selection-bar { position: fixed; top: 0; left: 0; width: 100%; height: 70px; background: rgba(88, 86, 214, 0.95); backdrop-filter: blur(10px); color: white; z-index: 1000; display: flex; align-items: center; padding: 0 1.2rem; gap: 1rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-        .selection-bar .icon-btn { color: white; background: rgba(255,255,255,0.2); width: 36px; height: 36px; border-radius: 10px; }
-        .selection-bar .icon-btn.danger-fill { background: #ff3b30; }
-        .selection-bar .text-action { font-size: 0.75rem; font-weight: 800; color: white; letter-spacing: 0.5px; }
+        .selection-bar { position: fixed; top: 0; left: 0; width: 100%; height: 70px; background: var(--accent-primary); color: white; z-index: 1000; display: flex; align-items: center; padding: 0 1.2rem; gap: 1rem; box-shadow: 0 8px 30px rgba(88, 86, 214, 0.3); animation: slideDown 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+        
+        .icon-btn-selection { color: white; background: rgba(255,255,255,0.2); width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .icon-btn-selection.danger-fill { background: #ff3b30; }
+        .selection-bar .text-action { font-size: 0.7rem; font-weight: 800; color: white; letter-spacing: 1px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.1); }
 
-        .checkbox { width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--text-muted); margin-right: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .checkbox { width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
         .checkbox.checked { background: var(--accent-primary); border-color: var(--accent-primary); color: white; }
 
-        .modern-snackbar { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #1c1c1e; color: white; padding: 14px 24px; border-radius: 16px; display: flex; align-items: center; gap: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); z-index: 2000; min-width: 280px; animation: slideUpFade 0.3s ease-out; }
-        .snackbar-msg { font-size: 0.9rem; font-weight: 500; }
-        .snackbar-undo { color: var(--accent-primary); font-weight: 800; font-size: 0.85rem; letter-spacing: 1px; }
-        @keyframes slideUpFade { from { transform: translate(-50%, 20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        .modern-snackbar { position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%); background: #1c1c1e; color: white; padding: 16px 24px; border-radius: 20px; display: flex; align-items: center; gap: 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 2000; min-width: 300px; animation: snackUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); border: 1px solid rgba(255,255,255,0.1); }
+        .snackbar-msg { font-size: 0.85rem; font-weight: 600; flex: 1; }
+        .snackbar-undo { color: var(--accent-primary); font-weight: 800; font-size: 0.8rem; letter-spacing: 1px; padding: 4px 8px; }
+        @keyframes snackUp { from { transform: translate(-50%, 40px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
+        .empty-state { text-align: center; padding: 4rem 2rem; color: var(--text-muted); }
+        .empty-state .icon { font-size: 3.5rem; margin-bottom: 1rem; opacity: 0.5; }
+        .empty-state p { font-size: 1rem; font-weight: 500; }
       `}</style>
     </div>
   );
