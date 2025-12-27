@@ -178,7 +178,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                 {visibilitySettings.bengali && data.bengali && (
                     <>
                     <div className="section-label">BENGALI</div>
-                    <div className="bengali-text" style={{ color: 'var(--text-primary)', fontSize: '1.1rem' }}>{data.bengali}</div>
+                    <div className="bengali-text">{data.bengali}</div>
                     </>
                 )}
 
@@ -194,7 +194,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                 {visibilitySettings.etymology && data.etymology && (
                     <>
                     <div className="section-label">ORIGIN / ETYMOLOGY</div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>{data.etymology}</div>
+                    <div className="etymology-text">{data.etymology}</div>
                     </>
                 )}
 
@@ -220,7 +220,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                 {visibilitySettings.usageNotes && data.usage_notes && (
                     <>
                     <div className="section-label">USAGE NOTES</div>
-                    <div style={{ fontSize: '0.85rem', background: '#fef3c7', color: '#92400e', padding: '10px', borderRadius: '12px', border: '1px solid #fde68a' }}>
+                    <div className="usage-box">
                         {data.usage_notes}
                     </div>
                     </>
@@ -279,6 +279,11 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
           }
           .fav-btn:active {
             transform: scale(0.9);
+          }
+          .synonyms-antonyms-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
           }
       `}</style>
     </div>

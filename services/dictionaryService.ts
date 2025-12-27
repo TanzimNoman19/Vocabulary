@@ -24,12 +24,10 @@ export interface CardData {
 
 export type VocabLevel = 'basic' | 'intermediate' | 'gre' | 'ielts' | 'expert';
 
-// Singleton instance to avoid re-initialization overhead
 let aiInstance: GoogleGenAI | null = null;
 
 const getAIClient = () => {
   if (!aiInstance) {
-    // API_KEY is guaranteed by the platform according to instructions
     aiInstance = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
   }
   return aiInstance;
@@ -42,14 +40,13 @@ export async function searchVocabulary(query: string): Promise<string[]> {
   const cleanQuery = query.trim();
   if (cleanQuery.length < 2) return [];
 
-  // Proactive offline check
   if (!navigator.onLine) {
     return DICTIONARY_WORDS.filter(w => w.toLowerCase().startsWith(cleanQuery.toLowerCase())).slice(0, 8);
   }
   
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for suggestions
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
 
     const response = await fetch(`https://api.datamuse.com/sug?s=${encodeURIComponent(cleanQuery)}&max=8`, {
         signal: controller.signal
@@ -60,26 +57,27 @@ export async function searchVocabulary(query: string): Promise<string[]> {
     const data = await response.json();
     return data.map((item: any) => item.word);
   } catch (error) {
-    // Quietly fallback to local data for search suggestions
     return DICTIONARY_WORDS.filter(w => w.toLowerCase().startsWith(cleanQuery.toLowerCase())).slice(0, 8);
   }
 }
 
 /**
- * Fetches data using Gemini API with retry logic and silent local fallback for errors
+ * Fetches data using Gemini API with retry logic and enhanced local fallback
  */
 export async function fetchWordData(word: string, retries = 1): Promise<CardData> {
+  const isLocalWord = DICTIONARY_WORDS.some(w => w.toLowerCase() === word.toLowerCase());
+  
   const localFallback: CardData = {
-    pos: 'word',
+    pos: isLocalWord ? 'common word' : 'word',
     ipa: 'N/A',
-    definition: 'Full definition details are currently unavailable offline.',
+    definition: `Full AI-enhanced details for "${word}" are pending download.`,
     bengali: 'অফলাইন থাকার কারণে বিস্তারিত পাওয়া যায়নি',
     family: 'N/A',
-    context: `The word "${word}" is frequently used in English.`,
+    context: `The term "${word}" is currently saved in your offline library.`,
     synonyms: 'N/A',
     antonyms: 'N/A',
     difficulty: 'Standard',
-    source: 'Local Fallback'
+    source: 'Local Cache'
   };
 
   if (!navigator.onLine) return localFallback;
@@ -87,17 +85,7 @@ export async function fetchWordData(word: string, retries = 1): Promise<CardData
   const ai = getAIClient();
   const prompt = `Define the English word "${word}" for a vocabulary flashcard.
   Return a JSON object with the following keys:
-  "pos" (part of speech),
-  "ipa" (phonetic pronunciation),
-  "definition" (precise English meaning),
-  "bengali" (accurate Bengali/Bangla translation),
-  "family" (related forms),
-  "context" (a natural example sentence),
-  "synonyms" (comma separated string),
-  "antonyms" (comma separated string),
-  "difficulty" (Basic, Intermediate, Advanced, or Expert),
-  "etymology" (short origin history),
-  "usage_notes" (nuanced usage advice).
+  "pos", "ipa", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
   No markdown, just raw JSON.`;
 
   try {
@@ -117,14 +105,10 @@ export async function fetchWordData(word: string, retries = 1): Promise<CardData
     };
   } catch (error: any) {
     const errorMsg = error.message || '';
-    
-    // Retry once for network/fetch failures
-    if (retries > 0 && (errorMsg.includes('fetch') || errorMsg.includes('Network') || errorMsg.includes('Failed'))) {
-      await new Promise(resolve => setTimeout(resolve, 800));
+    if (retries > 0 && (errorMsg.includes('fetch') || errorMsg.includes('Network'))) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
       return fetchWordData(word, retries - 1);
     }
-
-    console.warn(`Dictionary fetch failed for "${word}":`, errorMsg);
     return localFallback;
   }
 }
@@ -136,10 +120,9 @@ export function getLocalRandomWord(level: VocabLevel = 'intermediate'): string {
 
 export async function getShortDefinition(word: string): Promise<string> {
   try {
-    // Use a lightweight version or just rely on fetchWordData's internal safety
     const data = await fetchWordData(word);
     return `(${data.pos}) ${data.definition}\n${data.bengali}`;
   } catch (e) {
-    return "Definition unavailable. Check your connection.";
+    return "Definition unavailable offline.";
   }
 }

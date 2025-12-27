@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWordData, CardData } from './services/dictionaryService';
 import { SRSItem, calculateSRS, initializeSRSItem, getDueWords } from './services/srsService';
 import { supabase, saveUserData, getUserData, UserHistoryItem } from './services/supabaseClient';
@@ -47,6 +47,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [currentTopic, setCurrentTopic] = useState<string>('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const [savedWords, setSavedWords] = useState<string[]>(() => JSON.parse(localStorage.getItem('savedWords') || '[]'));
   const [favoriteWords, setFavoriteWords] = useState<string[]>(() => JSON.parse(localStorage.getItem('favoriteWords') || '[]'));
@@ -64,6 +65,43 @@ const App: React.FC = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+
+  // Background Sync Queue
+  const syncQueue = useRef<string[]>([]);
+  const isSyncProcessing = useRef(false);
+
+  const processSyncQueue = async () => {
+    if (isSyncProcessing.current || !isOnline || syncQueue.current.length === 0) return;
+    
+    isSyncProcessing.current = true;
+    setIsSyncing(true);
+
+    while (syncQueue.current.length > 0 && isOnline) {
+      const word = syncQueue.current.shift();
+      if (word && !cardCache[word]) {
+        try {
+          const data = await fetchWordData(word);
+          setCardCache(prev => ({ ...prev, [word]: data }));
+          // Throttling to respect API quotas
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (e) {
+          console.warn(`Background sync failed for ${word}`);
+        }
+      }
+    }
+
+    isSyncProcessing.current = false;
+    setIsSyncing(false);
+  };
+
+  // Trigger sync when online or library changes
+  useEffect(() => {
+    const missing = savedWords.filter(w => !cardCache[w]);
+    if (missing.length > 0 && isOnline) {
+      syncQueue.current = [...new Set([...syncQueue.current, ...missing])];
+      processSyncQueue();
+    }
+  }, [savedWords, isOnline, cardCache]);
 
   const loadDataFromSupabase = useCallback(async (userId: string) => {
     if (!navigator.onLine) return;
@@ -158,9 +196,6 @@ const App: React.FC = () => {
       }
   };
 
-  /**
-   * Smart merge for bulk imports
-   */
   const handleImportWords = (importedCache: Record<string, CardData>) => {
       const importedWordList = Object.keys(importedCache);
       const existingWordSet = new Set(savedWords.map(w => w.toLowerCase()));
@@ -175,21 +210,16 @@ const App: React.FC = () => {
               updatedWords.push(word);
           } else {
               newWords.push(word);
-              // If it was in trash, effectively restore it
               if (trashedWordSet.has(lowerWord)) {
                   setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
               }
           }
       });
 
-      // 1. Update card cache for ALL words (refresh definitions)
       setCardCache(prev => ({ ...prev, ...importedCache }));
 
-      // 2. Add truly NEW words to the library
       if (newWords.length > 0) {
           setSavedWords(prev => [...newWords, ...prev]);
-          
-          // 3. Initialize SRS for truly new words only
           setSrsData(prev => {
               const next = { ...prev };
               newWords.forEach(w => {
@@ -198,8 +228,6 @@ const App: React.FC = () => {
               return next;
           });
       }
-
-      console.log(`Import complete: ${newWords.length} new words, ${updatedWords.length} updated.`);
   };
 
   const handleMoveToTrash = (words: string[]) => {
@@ -248,19 +276,29 @@ const App: React.FC = () => {
       handleRandom();
   };
 
+  const handleResetSRS = () => {
+    setSrsData(prev => {
+      const next: Record<string, SRSItem> = {};
+      Object.keys(prev).forEach(word => {
+        next[word] = initializeSRSItem(word);
+      });
+      return next;
+    });
+  };
+
+  const cachedCount = savedWords.filter(w => cardCache[w]).length;
+
   return (
     <div className="app-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <header className="app-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className="logo-text">LexiFlow</div>
-          {!isOnline && <span className="offline-badge">Offline</span>}
+          {isSyncing && <div className="sync-spinner" title="Syncing library for offline use..."></div>}
         </div>
         <div className="header-actions">
+            {!isOnline && <span className="offline-badge-pill">LIMITED OFFLINE MODE</span>}
             <button className="icon-btn" onClick={() => setIsSettingsOpen(true)} title="Card Settings">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-            </button>
-            <button className="icon-btn" onClick={() => setIsBulkImportOpen(true)} title="Import Library">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1-1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             </button>
             <button className="icon-btn" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}>
                 {theme === 'light' ? '🌙' : '☀️'}
@@ -273,12 +311,18 @@ const App: React.FC = () => {
       {isSettingsOpen && <CardSettingsModal settings={visibilitySettings} onUpdate={setVisibilitySettings} onClose={() => setIsSettingsOpen(false)} />}
 
       <main className="main-content">
+        {!isOnline && (
+            <div className="offline-banner">
+                You're studying offline. {cachedCount}/{savedWords.length} words are ready for review.
+            </div>
+        )}
+        
         {activeTab === 'home' && (
             <FlashcardView topic={currentTopic} savedWords={savedWords} favoriteWords={favoriteWords} srsData={srsData} cardCache={cardCache} onUpdateSRS={handleSRSUpdate} onToggleSave={handleToggleSave} onToggleFavorite={handleToggleFavorite} onNavigate={handleSearch} onCacheUpdate={(w, d) => setCardCache(prev => ({ ...prev, [w]: d }))} onOpenImport={() => setIsBulkImportOpen(true)} isOnline={isOnline} visibilitySettings={visibilitySettings} />
         )}
         {activeTab === 'saved' && <SavedWordsList savedWords={savedWords} favoriteWords={favoriteWords} trashedWords={trashedWords} srsData={srsData} cardCache={cardCache} onNavigate={handleSearch} onDeleteMultiple={handleMoveToTrash} onRestoreFromTrash={handleRestoreFromTrash} onPermanentDelete={handlePermanentDelete} />}
         {activeTab === 'search' && <div className="search-view"><SearchBar onSearch={handleSearch} savedWords={savedWords} isOnline={isOnline} /></div>}
-        {activeTab === 'profile' && <ProfileView user={user} savedCount={savedWords.length} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} onOpenHistory={() => setIsHistoryOpen(true)} isOnline={isOnline} />}
+        {activeTab === 'profile' && <ProfileView user={user} savedCount={savedWords.length} cachedCount={cachedCount} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} onOpenHistory={() => setIsHistoryOpen(true)} isOnline={isOnline} onResetSRS={handleResetSRS} />}
       </main>
 
       <div className="bottom-nav-container">
