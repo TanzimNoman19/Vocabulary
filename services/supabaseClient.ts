@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -25,6 +26,8 @@ let isGlobalCacheAvailable = true;
  * Saves user-specific data (saved words, SRS, history, etc.)
  */
 export const saveUserData = async (userId: string, data: any) => {
+  if (!navigator.onLine) return;
+  
   try {
     const { error } = await supabase
       .from('user_data')
@@ -38,20 +41,21 @@ export const saveUserData = async (userId: string, data: any) => {
       );
     
     if (error) {
-      // Only log if it's not a standard network failure
       if (!error.message?.includes('fetch')) {
-        console.error('Supabase error (user_data):', error.message);
+        console.warn('Supabase sync warning:', error.message);
       }
     }
   } catch (e) {
-    // Silent fail for network errors
+    // Silent fail for network errors as it will sync automatically when connection returns
   }
 };
 
 /**
- * Fetches user-specific data
+ * Fetches user-specific data with connectivity guard
  */
 export const getUserData = async (userId: string) => {
+  if (!navigator.onLine) return null;
+
   try {
     const { data, error } = await supabase
       .from('user_data')
@@ -82,16 +86,13 @@ export const getCachedDefinition = async (word: string) => {
       .single();
     
     if (error) {
-      // Detect if the table doesn't exist to prevent repeated errors
       if (error.message?.includes('word_definitions') && (error.message?.includes('not find') || error.code === '42P01')) {
-        console.warn('Global cache table missing. Falling back to AI-only mode.');
         isGlobalCacheAvailable = false;
       }
       return null;
     }
     return data?.data || null;
   } catch (e) {
-    // If fetch failed, assume network issue and return null silently
     return null;
   }
 };
@@ -114,21 +115,8 @@ export const saveCachedDefinition = async (word: string, definitionData: any) =>
         { onConflict: 'word' }
       );
     
-    if (error) {
-      // Check for table missing error
-      if (error.message?.includes('word_definitions') && (error.message?.includes('not find') || error.code === '42P01')) {
-        isGlobalCacheAvailable = false;
-        return;
-      }
-      
-      // Ignore duplicate key errors (23505) and generic fetch errors
-      const isNetworkError = error.message?.toLowerCase().includes('fetch');
-      if (error.code !== '23505' && !isNetworkError) { 
-        console.error('Error caching definition:', error.message);
-      }
+    if (error && error.code !== '23505' && !error.message?.toLowerCase().includes('fetch')) { 
+      console.warn('Cache write issue:', error.message);
     }
-  } catch (e: any) {
-    // Catch-all for TypeError: Failed to fetch and other browser-level network errors
-    // We treat these as silent failures because caching is an optimization, not a requirement.
-  }
+  } catch (e: any) {}
 };

@@ -89,7 +89,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, on
                 </button>
 
                 <button 
-                    onClick={user ? onSignOut : () => setShowAuth(true)}
+                    onClick={() => setShowAuth(true)}
                     disabled={!isOnline && !user}
                     style={{ 
                         width: '100%', 
@@ -97,16 +97,26 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, srsData, on
                         borderRadius: '12px', 
                         border: '1px solid var(--border-color)',
                         fontWeight: '600',
-                        color: user ? 'var(--danger-color)' : 'var(--text-primary)',
+                        color: user ? 'var(--text-primary)' : 'var(--accent-primary)',
                         opacity: (!isOnline && !user) ? 0.5 : 1
                     }}
                 >
-                    {user ? 'SIGN OUT' : (isOnline ? 'LOG IN / SIGN UP' : 'LOGIN UNAVAILABLE')}
+                    {user ? 'MANAGE ACCOUNT' : (isOnline ? 'LOG IN / SIGN UP' : 'LOGIN UNAVAILABLE')}
                 </button>
             </div>
         </div>
 
-        {showAuth && isOnline && <AuthModal onClose={() => setShowAuth(false)} onSignOut={() => {}} userDisplayName={null} userEmail={null} />}
+        {showAuth && (
+            <AuthModal 
+                onClose={() => setShowAuth(false)} 
+                onSignOut={() => {
+                    onSignOut();
+                    setShowAuth(false);
+                }} 
+                userDisplayName={displayName} 
+                userEmail={user?.email} 
+            />
+        )}
     </div>
   );
 };

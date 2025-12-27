@@ -43,7 +43,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
   const [swipeOffset, setSwipeOffset] = useState(0);
   const touchStart = useRef({ x: 0, y: 0 });
 
-  // Undo Snackbar State (Now specifically for "Moved to Trash")
+  // Undo Snackbar State
   const [lastTrashed, setLastTrashed] = useState<string[] | null>(null);
   const undoTimeout = useRef<number | null>(null);
 
@@ -68,6 +68,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         } else {
             const idxA = savedWords.indexOf(a);
             const idxB = savedWords.indexOf(b);
+            // Default newest first (desc)
             return sortOrder === 'asc' ? idxB - idxA : idxA - idxB;
         }
     });
@@ -290,7 +291,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         )}
       </div>
 
-      {/* Undo Snackbar */}
       {lastTrashed && (
           <div className="modern-snackbar">
               <span className="snackbar-msg">Moved {lastTrashed.length} {lastTrashed.length === 1 ? 'word' : 'words'} to Trash</span>
@@ -299,17 +299,17 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
       )}
 
       <style>{`
-        .list-tabs-container { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; }
+        .list-tabs-container { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; padding: 0 4px; }
         .list-tabs { flex: 1; display: flex; gap: 4px; background: var(--accent-secondary); padding: 4px; border-radius: 12px; }
         .list-tabs button { flex: 1; padding: 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); transition: all 0.2s; }
         .list-tabs button.active { background: var(--card-bg); color: var(--accent-primary); box-shadow: var(--shadow-sm); }
         .list-tabs button.active.fav { color: #ff2d55; }
         
-        .trash-btn { width: 44px; height: 44px; background: var(--accent-secondary); color: var(--text-secondary); position: relative; }
+        .trash-btn { width: 44px; height: 44px; background: var(--accent-secondary); color: var(--text-secondary); position: relative; border-radius: 12px; }
         .trash-btn.not-empty { color: var(--accent-primary); }
-        .trash-btn.not-empty::after { content: ''; position: absolute; top: 12px; right: 12px; width: 6px; height: 6px; background: var(--danger-color); border-radius: 50%; }
+        .trash-btn.not-empty::after { content: ''; position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; background: var(--danger-color); border-radius: 50%; border: 2px solid var(--accent-secondary); }
 
-        .filter-sort-bar { margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: 12px; }
+        .filter-sort-bar { margin: 0 4px 1.2rem 4px; display: flex; flex-direction: column; gap: 12px; }
         .sort-toggles { display: flex; gap: 8px; }
         .sort-toggles button { font-size: 0.7rem; font-weight: 700; padding: 8px 14px; border-radius: 10px; background: var(--accent-secondary); color: var(--accent-primary); }
         .sort-toggles button.active { background: var(--accent-primary); color: white; }
@@ -317,14 +317,14 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .chip { white-space: nowrap; font-size: 0.65rem; font-weight: 800; padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border-color); color: var(--text-secondary); }
         .chip.active { background: var(--text-primary); color: var(--bg-color); border-color: var(--text-primary); }
 
-        .words-scroll-list { display: flex; flex-direction: column; gap: 0.8rem; }
+        .words-scroll-list { display: flex; flex-direction: column; gap: 0.8rem; padding: 0 4px; }
         .swipe-container { position: relative; overflow: hidden; border-radius: 16px; }
         .swipe-bg { position: absolute; right: 0; top: 0; height: 100%; width: 100px; background: var(--danger-color); color: white; display: flex; align-items: center; justify-content: flex-end; padding-right: 25px; border-radius: 16px; z-index: 1; }
-        .word-card-row { position: relative; z-index: 2; background: var(--card-bg); transition: transform 0.15s ease-out, background 0.2s; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); }
-        .word-card-row.selected { background: var(--accent-secondary); border-color: var(--accent-primary); transform: scale(0.97); }
-        .row-fav-icon { margin-left: 6px; font-size: 0.8rem; }
+        .word-card-row { position: relative; z-index: 2; background: var(--card-bg); transition: transform 0.15s ease-out, background 0.2s; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); padding: 1.2rem; display: flex; align-items: center; }
+        .word-card-row.selected { background: var(--accent-secondary); border-color: var(--accent-primary); transform: scale(0.98); }
+        .row-fav-icon { margin-left: 6px; font-size: 0.8rem; color: #ff2d55; }
 
-        .selection-bar { position: fixed; top: 0; left: 0; width: 100%; height: 70px; background: rgba(88, 86, 214, 0.95); backdrop-filter: blur(10px); color: white; z-index: 1000; display: flex; align-items: center; padding: 0 1.2rem; gap: 1rem; }
+        .selection-bar { position: fixed; top: 0; left: 0; width: 100%; height: 70px; background: rgba(88, 86, 214, 0.95); backdrop-filter: blur(10px); color: white; z-index: 1000; display: flex; align-items: center; padding: 0 1.2rem; gap: 1rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
         .selection-bar .icon-btn { color: white; background: rgba(255,255,255,0.2); width: 36px; height: 36px; border-radius: 10px; }
         .selection-bar .icon-btn.danger-fill { background: #ff3b30; }
         .selection-bar .text-action { font-size: 0.75rem; font-weight: 800; color: white; letter-spacing: 0.5px; }

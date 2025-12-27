@@ -144,7 +144,6 @@ const App: React.FC = () => {
       if (exists) {
           handleMoveToTrash([word]);
       } else {
-          // If restoring from trash via save toggle
           if (trashedWords.includes(word)) {
               handleRestoreFromTrash([word]);
           } else {
@@ -186,7 +185,6 @@ const App: React.FC = () => {
           setFavoriteWords(prev => [word, ...prev]);
           if (!savedWords.includes(word)) setSavedWords(prev => [word, ...prev]);
           if (!srsData[word]) setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
-          // If it was in trash, restore it
           if (trashedWords.includes(word)) {
               setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== word.toLowerCase()));
           }
