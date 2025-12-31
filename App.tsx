@@ -225,6 +225,36 @@ const App: React.FC = () => {
       }
   };
 
+  const handleUpdateWordData = (oldWord: string, newWord: string, newData: CardData) => {
+    if (oldWord === newWord) {
+      setCardCache(prev => ({ ...prev, [newWord]: newData }));
+      return;
+    }
+
+    // Handle Word Renaming
+    setCardCache(prev => {
+      const next = { ...prev, [newWord]: newData };
+      delete next[oldWord];
+      return next;
+    });
+
+    setSrsData(prev => {
+      const next = { ...prev };
+      if (next[oldWord]) {
+        next[newWord] = { ...next[oldWord], word: newWord };
+        delete next[oldWord];
+      }
+      return next;
+    });
+
+    setSavedWords(prev => prev.map(w => w === oldWord ? newWord : w));
+    setFavoriteWords(prev => prev.map(w => w === oldWord ? newWord : w));
+    
+    if (currentTopic === oldWord) {
+      setCurrentTopic(newWord);
+    }
+  };
+
   const handleMoveToTrash = (words: string[]) => {
       const wordSet = new Set(words.map(w => w.toLowerCase()));
       setSavedWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
@@ -361,6 +391,7 @@ const App: React.FC = () => {
                 onRestoreFromTrash={handleRestoreFromTrash} 
                 onPermanentDelete={handlePermanentDelete} 
                 onOpenImport={() => setIsBulkImportOpen(true)}
+                onUpdateWordData={handleUpdateWordData}
             />
         )}
         {activeTab === 'profile' && <ProfileView user={user} savedCount={savedWords.length} cachedCount={cachedCount} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} isOnline={isOnline} onResetSRS={handleResetSRS} />}
@@ -397,7 +428,7 @@ const App: React.FC = () => {
           align-items: center;
           justify-content: center;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          border: 1px solid transparent;
+          border: 1px solid var(--border-color);
           flex-shrink: 0;
         }
         .icon-btn:hover {

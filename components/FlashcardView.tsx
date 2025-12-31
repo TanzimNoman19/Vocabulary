@@ -318,8 +318,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
             transform: scale(0.9);
           }
           .status-badge.re-learning {
-              background: #ffebee;
-              color: #d32f2f;
+              background: rgba(239, 68, 68, 0.1);
+              color: var(--danger-color);
+              border: 1px solid rgba(239, 68, 68, 0.2);
           }
           .synonyms-antonyms-container {
             display: flex;

@@ -6,6 +6,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { SRSItem } from '../services/srsService';
 import { CardData } from '../services/dictionaryService';
+import EditWordModal from './EditWordModal';
 
 interface SavedWordsListProps {
   savedWords: string[];
@@ -18,6 +19,7 @@ interface SavedWordsListProps {
   onRestoreFromTrash: (words: string[]) => void;
   onPermanentDelete: (words: string[]) => void;
   onOpenImport: () => void;
+  onUpdateWordData: (oldWord: string, newWord: string, newData: CardData) => void;
 }
 
 type SortType = 'alpha' | 'time';
@@ -25,7 +27,7 @@ type SortOrder = 'asc' | 'desc';
 type MasteryFilter = 'all' | 'new' | 'learning' | 'mastered';
 
 const SavedWordsList: React.FC<SavedWordsListProps> = ({ 
-    savedWords, favoriteWords, trashedWords, srsData, cardCache, onNavigate, onDeleteMultiple, onRestoreFromTrash, onPermanentDelete, onOpenImport
+    savedWords, favoriteWords, trashedWords, srsData, cardCache, onNavigate, onDeleteMultiple, onRestoreFromTrash, onPermanentDelete, onOpenImport, onUpdateWordData
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
   const [sortBy, setSortBy] = useState<SortType>('time');
@@ -36,6 +38,9 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
   const longPressTimer = useRef<number | null>(null);
+
+  // Edit Mode State
+  const [editingWord, setEditingWord] = useState<string | null>(null);
 
   // Undo Snackbar State
   const [lastTrashed, setLastTrashed] = useState<string[] | null>(null);
@@ -121,6 +126,11 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         setLastTrashed(null);
         if (undoTimeout.current) clearTimeout(undoTimeout.current);
     }
+  };
+
+  const handleOpenEdit = (e: React.MouseEvent, word: string) => {
+    e.stopPropagation();
+    setEditingWord(word);
   };
 
   return (
@@ -229,6 +239,15 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                                 <div className="card-indicators">
                                     {isFaved && <span className="fav-indicator">❤️</span>}
                                     <span className={`mastery-pill ${badgeClass}`}>{badgeText}</span>
+                                    {!selectionMode && (
+                                        <button 
+                                            className="row-edit-btn" 
+                                            onClick={(e) => handleOpenEdit(e, word)}
+                                            title="Edit Word Data"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                             <p className="word-snippet">{cache ? cache.definition : 'AI details loading...'}</p>
@@ -253,6 +272,18 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             })
         )}
       </div>
+
+      {editingWord && (
+          <EditWordModal 
+            word={editingWord}
+            initialData={cardCache[editingWord] || {} as CardData}
+            onClose={() => setEditingWord(null)}
+            onSave={(oldWord, newWord, newData) => {
+                onUpdateWordData(oldWord, newWord, newData);
+                setEditingWord(null);
+            }}
+          />
+      )}
 
       {lastTrashed && (
           <div className="modern-snackbar">
@@ -302,6 +333,19 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .card-indicators { display: flex; align-items: center; gap: 6px; }
         .fav-indicator { font-size: 0.8rem; }
         
+        .row-edit-btn {
+            background: var(--accent-secondary);
+            color: var(--accent-primary);
+            padding: 4px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.8;
+            transition: all 0.2s;
+        }
+        .row-edit-btn:hover { opacity: 1; transform: translateY(-1px); }
+
         .mastery-pill { 
             font-size: 0.6rem; 
             padding: 3px 8px; 
