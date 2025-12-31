@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useState, useEffect } from 'react';
-import { CardData } from '../services/dictionaryService';
+import { CardData, fetchWordData, fetchContextSentence } from '../services/dictionaryService';
 
 interface EditWordModalProps {
   word: string;
@@ -19,6 +19,9 @@ const EditWordModal: React.FC<EditWordModalProps> = ({ word, initialData, onClos
   const [viewMode, setViewMode] = useState<'form' | 'json'>('form');
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
+  
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isSentenceLoading, setIsSentenceLoading] = useState(false);
 
   // Initialize JSON text when opening or switching to JSON mode
   useEffect(() => {
@@ -26,7 +29,7 @@ const EditWordModal: React.FC<EditWordModalProps> = ({ word, initialData, onClos
       const fullObject = { word: tempWord, ...formData };
       setJsonText(JSON.stringify(fullObject, null, 2));
     }
-  }, [viewMode]);
+  }, [viewMode, formData, tempWord]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -65,6 +68,32 @@ const EditWordModal: React.FC<EditWordModalProps> = ({ word, initialData, onClos
     }
   };
 
+  const handleAiGlobalRefresh = async () => {
+    if (!tempWord.trim() || isAiLoading) return;
+    setIsAiLoading(true);
+    try {
+      const newData = await fetchWordData(tempWord.trim());
+      setFormData(newData);
+    } catch (e) {
+      console.error("AI Refresh failed", e);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleAiSentenceRefresh = async () => {
+    if (!tempWord.trim() || isSentenceLoading) return;
+    setIsSentenceLoading(true);
+    try {
+      const newSentence = await fetchContextSentence(tempWord.trim());
+      setFormData(prev => ({ ...prev, context: newSentence }));
+    } catch (e) {
+      console.error("Sentence Refresh failed", e);
+    } finally {
+      setIsSentenceLoading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -85,6 +114,20 @@ const EditWordModal: React.FC<EditWordModalProps> = ({ word, initialData, onClos
             <span className="subtitle">{tempWord}</span>
           </div>
           <div className="header-actions-group">
+            {viewMode === 'form' && (
+              <button 
+                className={`ai-refresh-btn ${isAiLoading ? 'loading' : ''}`} 
+                onClick={handleAiGlobalRefresh}
+                title="Regenerate all fields using Gemini AI"
+                disabled={isAiLoading}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                  <path d="M5 3v4"/><path d="M3 5h4"/><path d="M21 17v4"/><path d="M19 19h4"/>
+                </svg>
+                {isAiLoading ? 'Regenerating...' : 'AI Refresh'}
+              </button>
+            )}
             <button className="mode-toggle-btn" onClick={handleToggleMode}>
                 {viewMode === 'form' ? '{ } Edit JSON' : '📝 Back to Form'}
             </button>
@@ -128,8 +171,29 @@ const EditWordModal: React.FC<EditWordModalProps> = ({ word, initialData, onClos
               </div>
 
               <div className="form-group">
-                <label>Context / Example</label>
-                <textarea name="context" value={formData.context} onChange={handleChange} placeholder="Example sentence..." rows={2} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label>Context / Example</label>
+                    <button 
+                        type="button" 
+                        className={`mini-ai-btn ${isSentenceLoading ? 'loading' : ''}`}
+                        onClick={handleAiSentenceRefresh}
+                        title="Generate new example sentence"
+                        disabled={isSentenceLoading}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+                        </svg>
+                        <span>AI Sentence</span>
+                    </button>
+                </div>
+                <textarea 
+                    name="context" 
+                    value={formData.context} 
+                    onChange={handleChange} 
+                    placeholder="Example sentence..." 
+                    rows={2} 
+                    style={{ opacity: isSentenceLoading ? 0.6 : 1, transition: 'opacity 0.2s' }}
+                />
               </div>
 
               <div className="form-grid">
@@ -182,7 +246,7 @@ const EditWordModal: React.FC<EditWordModalProps> = ({ word, initialData, onClos
 
           <div className="form-actions">
             <button type="button" className="auth-btn" onClick={onClose}>Cancel</button>
-            <button type="submit" className="auth-btn primary" disabled={!!jsonError}>Save Changes</button>
+            <button type="submit" className="auth-btn primary" disabled={!!jsonError || isAiLoading}>Save Changes</button>
           </div>
         </form>
       </div>
@@ -211,6 +275,43 @@ const EditWordModal: React.FC<EditWordModalProps> = ({ word, initialData, onClos
         .header-info-group .subtitle { font-size: 0.75rem; color: var(--accent-primary); font-weight: 800; text-transform: uppercase; margin-top: 2px; }
         
         .header-actions-group { display: flex; align-items: center; gap: 8px; }
+        
+        .ai-refresh-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #5856d6 0%, #ff2d55 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ai-refresh-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.3); }
+        .ai-refresh-btn:active { transform: translateY(0); }
+        .ai-refresh-btn.loading svg { animation: spin 1s linear infinite; }
+        
+        .mini-ai-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.65rem;
+            font-weight: 800;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: var(--accent-secondary);
+            color: var(--accent-primary);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        .mini-ai-btn:hover { background: var(--border-color); }
+        .mini-ai-btn.loading svg { animation: spin 1s linear infinite; }
+
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
         .mode-toggle-btn {
             font-size: 0.7rem;
             font-weight: 800;

@@ -193,7 +193,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 <p>{filter === 'all' ? 'Your library is empty.' : 'No matches found.'}</p>
                 {filter === 'all' && activeTab === 'all' && (
                   <button className="auth-btn primary" style={{ marginTop: '1rem' }} onClick={onOpenImport}>
-                    Bulk Import JSON
+                    Import Words
                   </button>
                 )}
             </div>

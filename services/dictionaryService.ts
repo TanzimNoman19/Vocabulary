@@ -86,8 +86,15 @@ export async function fetchWordData(word: string, retries = 1): Promise<CardData
   const prompt = `Define the English word "${word}" for a vocabulary flashcard.
   Return a JSON object with the following keys:
   "pos", "ipa", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
-  For "family", provide a comma-separated list of related forms (e.g., for "abandon", "abandonment (n), abandoned (adj)").
-  No markdown, just raw JSON.`;
+  
+  RULES:
+  1. "bengali": Provide an elaborative, descriptive Bengali definition. NO phonetic English in parentheses.
+  2. "usage_notes": BE CREATIVE AND STRUCTURED. Use these labels to provide practical tips:
+     - [TRAP]: Mention similar-looking or similar-sounding words that might confuse a learner.
+     - [MNEMONIC]: Provide a clever memory trick or visual association.
+     - [VIBE]: Describe the "feeling" of the word (e.g., Formal, Romantic, Academic, Aggressive).
+     - [TIP]: A quick rule of thumb for using it correctly.
+  3. Format: Raw JSON only.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -100,6 +107,11 @@ export async function fetchWordData(word: string, retries = 1): Promise<CardData
     });
 
     const data = JSON.parse(response.text || '{}');
+    
+    if (data.bengali) {
+      data.bengali = data.bengali.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim();
+    }
+
     return {
       ...data,
       source: 'Gemini AI'
@@ -111,6 +123,74 @@ export async function fetchWordData(word: string, retries = 1): Promise<CardData
       return fetchWordData(word, retries - 1);
     }
     return localFallback;
+  }
+}
+
+/**
+ * Batch generate data for multiple words.
+ */
+export async function generateBulkWordData(words: string[]): Promise<Record<string, CardData>> {
+  if (!navigator.onLine) throw new Error("Offline: Cannot use AI bulk generation.");
+  if (words.length === 0) return {};
+
+  const ai = getAIClient();
+  const prompt = `Generate comprehensive vocabulary flashcard data for: ${words.join(', ')}.
+  Return a JSON array of objects. Each object must have a "word" key plus:
+  "pos", "ipa", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
+  
+  USAGE_NOTES RULE: Be creative and highly practical. Always use structured labels like [TRAP], [MNEMONIC], [VIBE], and [TIP] within the string to separate different types of advice.
+  Example usage_note: "[TRAP]: Often confused with X. [MNEMONIC]: Remember Y."
+  No markdown, just raw JSON array only.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { 
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 }
+      }
+    });
+
+    const results = JSON.parse(response.text || '[]');
+    const finalCache: Record<string, CardData> = {};
+
+    if (Array.isArray(results)) {
+      results.forEach((item: any) => {
+        if (!item.word) return;
+        const { word: w, ...data } = item;
+        if (data.bengali) {
+            data.bengali = data.bengali.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim();
+        }
+        finalCache[w] = { ...data, source: 'Gemini Bulk AI' } as CardData;
+      });
+    }
+
+    return finalCache;
+  } catch (error: any) {
+    console.error("Bulk AI Gen Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Generates only a context sentence for a given word using Gemini AI.
+ */
+export async function fetchContextSentence(word: string): Promise<string> {
+  if (!navigator.onLine) return `The word "${word}" is useful in many contexts.`;
+
+  const ai = getAIClient();
+  const prompt = `Generate one concise, illustrative example sentence for the word "${word}". No intro, just the sentence.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { thinkingConfig: { thinkingBudget: 0 } }
+    });
+    return response.text.trim();
+  } catch (error) {
+    return `Could not generate sentence for "${word}".`;
   }
 }
 

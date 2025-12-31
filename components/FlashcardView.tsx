@@ -103,6 +103,29 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     }
   };
 
+  const renderUsageNotes = (notes: any) => {
+    if (!notes) return null;
+    
+    // Safety check to ensure we are working with a string to avoid TypeError: str.split is not a function
+    const notesStr = typeof notes === 'string' ? notes : String(notes);
+    
+    // Split by bracketed tags: [TRAP], [MNEMONIC], etc.
+    const parts = notesStr.split(/(\[[A-Z-]+\]:?)/g).filter(Boolean);
+    
+    return (
+      <div className="usage-box-container">
+        {parts.map((part, idx) => {
+          const isTag = /^\[[A-Z-]+\]:?$/.test(part);
+          if (isTag) {
+            const label = part.replace(/[\[\]:]/g, '');
+            return <span key={idx} className={`usage-tag tag-${label.toLowerCase()}`}>{label}</span>;
+          }
+          return <p key={idx} className="usage-text-segment">{part.trim()}</p>;
+        })}
+      </div>
+    );
+  };
+
   if (topic === "__EMPTY_FALLBACK__") {
       return (
           <div className="flashcard-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -110,10 +133,10 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                   <div style={{ fontSize: '3.5rem', marginBottom: '1.5rem' }}>📚</div>
                   <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Library is Empty</h2>
                   <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '0 1rem', lineHeight: '1.5', fontSize: '0.95rem' }}>
-                      Import words or use the search tab to add words to your library.
+                      Start building your personalized library to begin your learning journey.
                   </p>
                   <button className="auth-btn primary" style={{ marginTop: '2rem' }} onClick={onOpenImport}>
-                      Bulk Import JSON
+                      Import Words
                   </button>
               </div>
           </div>
@@ -123,7 +146,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   const isFavorite = favoriteWords.includes(topic);
   const srsItem = srsData[topic];
   
-  // Logic to determine user-friendly status
   const getStatusLabel = () => {
     if (!srsItem || srsItem.reviewCount === 0) return 'NEW WORD';
     if (srsItem.masteryLevel >= 5) return 'MASTERED';
@@ -133,10 +155,11 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
   const statusLabel = getStatusLabel();
   
-  // Robust parsing for chips
-  const parseList = (str: string) => {
-    if (!str || str === 'N/A') return [];
-    return str.split(',').map(s => s.trim()).filter(Boolean);
+  const parseList = (val: any) => {
+    if (!val || val === 'N/A') return [];
+    if (Array.isArray(val)) return val.map(v => String(v).trim()).filter(Boolean);
+    if (typeof val !== 'string') return [String(val)];
+    return val.split(',').map(s => s.trim()).filter(Boolean);
   };
 
   const synonymsList = parseList(data.synonyms);
@@ -187,7 +210,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                     <>
                     <div className="section-label">DEFINITION</div>
                     <div className="def-text">
-                        <InteractiveText text={data.definition || 'Waiting for details...'} onWordClick={handleWordClick} />
+                        <InteractiveText text={String(data.definition || 'Waiting for details...')} onWordClick={handleWordClick} />
                     </div>
                     </>
                 )}
@@ -195,7 +218,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                 {visibilitySettings.bengali && data.bengali && (
                     <>
                     <div className="section-label">BENGALI</div>
-                    <div className="bengali-text">{data.bengali}</div>
+                    <div className="bengali-text">{String(data.bengali)}</div>
                     </>
                 )}
 
@@ -203,7 +226,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                     <>
                     <div className="section-label">IN CONTEXT</div>
                     <div className="context-box">
-                      <InteractiveText text={data.context || 'Generating example sentence...'} onWordClick={handleWordClick} />
+                      <InteractiveText text={String(data.context || 'Generating example sentence...')} onWordClick={handleWordClick} />
                     </div>
                     </>
                 )}
@@ -231,7 +254,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                 {visibilitySettings.etymology && data.etymology && (
                     <>
                     <div className="section-label">ORIGIN / ETYMOLOGY</div>
-                    <div className="etymology-text">{data.etymology}</div>
+                    <div className="etymology-text">{String(data.etymology)}</div>
                     </>
                 )}
 
@@ -256,9 +279,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
                 {visibilitySettings.usageNotes && data.usage_notes && (
                     <>
-                    <div className="section-label">USAGE NOTES</div>
+                    <div className="section-label">CREATIVE USAGE NOTES</div>
                     <div className="usage-box">
-                        {data.usage_notes}
+                        {renderUsageNotes(data.usage_notes)}
                     </div>
                     </>
                 )}
@@ -296,6 +319,32 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
       )}
 
       <style>{`
+          .usage-box-container {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+          }
+          .usage-tag {
+              display: inline-block;
+              font-size: 0.65rem;
+              font-weight: 900;
+              padding: 2px 8px;
+              border-radius: 4px;
+              width: fit-content;
+              letter-spacing: 0.5px;
+          }
+          .tag-trap { background: #fee2e2; color: #991b1b; }
+          .tag-mnemonic { background: #fef9c3; color: #854d0e; }
+          .tag-vibe { background: #e0e7ff; color: #3730a3; }
+          .tag-context { background: #dcfce7; color: #166534; }
+          .tag-tip { background: #ffedd5; color: #9a3412; }
+          
+          .usage-text-segment {
+              margin: 0;
+              line-height: 1.5;
+              font-size: 0.95rem;
+          }
+
           .card-actions-top {
             position: absolute;
             top: 1.5rem;

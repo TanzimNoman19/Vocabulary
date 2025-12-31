@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useState, useEffect } from 'react';
-import { CardData } from '../services/dictionaryService';
+import { CardData, generateBulkWordData } from '../services/dictionaryService';
 
 interface BulkImportModalProps {
   onClose: () => void;
@@ -12,63 +12,34 @@ interface BulkImportModalProps {
 }
 
 const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) => {
+  const [activeTab, setActiveTab] = useState<'json' | 'ai'>('json');
   const [jsonInput, setJsonInput] = useState('');
+  const [aiInput, setAiInput] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copyStatus, setCopyStatus] = useState<'Copy Sample' | 'Copied!'>('Copy Sample');
+  const [copyStatus, setCopyStatus] = useState<'Copy Sample JSON' | 'Copied!'>('Copy Sample JSON');
   const [summary, setSummary] = useState<{ total: number, unique: number } | null>(null);
 
   useEffect(() => {
-    if (!jsonInput.trim()) {
-        setSummary(null);
-        setError(null);
-        return;
-    }
-    try {
-        const parsed = JSON.parse(jsonInput);
-        if (Array.isArray(parsed)) {
-            const uniqueWords = new Set(parsed.map((i: any) => i.word?.toLowerCase()).filter(Boolean));
-            setSummary({ total: parsed.length, unique: uniqueWords.size });
-            setError(null);
-        } else {
+    if (activeTab === 'json' && jsonInput.trim()) {
+        try {
+            const parsed = JSON.parse(jsonInput);
+            if (Array.isArray(parsed)) {
+                const uniqueWords = new Set(parsed.map((i: any) => i.word?.toLowerCase()).filter(Boolean));
+                setSummary({ total: parsed.length, unique: uniqueWords.size });
+                setError(null);
+            } else {
+                setSummary(null);
+            }
+        } catch (e) {
             setSummary(null);
         }
-    } catch (e) {
+    } else {
         setSummary(null);
     }
-  }, [jsonInput]);
+  }, [jsonInput, activeTab]);
 
-  const sampleJson = `[
-  {
-    "word": "Serendipity",
-    "pos": "noun",
-    "ipa": "/ˌserənˈdipitē/",
-    "definition": "The occurrence of events by chance in a happy or beneficial way.",
-    "bengali": "ভাগ্যক্রমে ঘটা আনন্দদায়ক ঘটনা",
-    "family": "serendipitous (adj)",
-    "context": "Winning the lottery was a pure act of serendipity.",
-    "synonyms": "luck, fluke, providence",
-    "antonyms": "misfortune, bad luck",
-    "etymology": "Coined by Horace Walpole in 1754 from the Persian fairy tale 'The Three Princes of Serendip'.",
-    "usage_notes": "Commonly used in literature to describe unexpected scientific discoveries.",
-    "difficulty": "Intermediate"
-  },
-  {
-    "word": "Pernicious",
-    "pos": "adjective",
-    "ipa": "/pərˈniSHəs/",
-    "definition": "Having a harmful effect, especially in a gradual or subtle way.",
-    "bengali": "অত্যন্ত ক্ষতিকারক",
-    "family": "perniciously (adv)",
-    "context": "The pernicious influences of social media can affect mental health.",
-    "synonyms": "harmful, damaging, destructive, inimical",
-    "antonyms": "beneficial, benign",
-    "etymology": "Derived from Latin 'perniciosus' meaning 'destructive'.",
-    "usage_notes": "Often used in political or social commentary regarding toxic ideologies.",
-    "difficulty": "Advanced"
-  }
-]`;
-
-  const handleImport = () => {
+  const handleJsonImport = () => {
     try {
       const parsed = JSON.parse(jsonInput);
       if (!Array.isArray(parsed)) throw new Error("Input must be a JSON array.");
@@ -99,7 +70,59 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
     }
   };
 
+  const handleAiGenerate = async () => {
+    if (!aiInput.trim()) return;
+    const words = aiInput.split(/[,|\n]/).map(w => w.trim()).filter(w => w.length > 1);
+    
+    if (words.length === 0) {
+        setError("Please enter at least one word.");
+        return;
+    }
+
+    setIsGenerating(true);
+    setError(null);
+    
+    try {
+        const result = await generateBulkWordData(words);
+        onImport(result);
+        onClose();
+    } catch (e: any) {
+        setError("AI generation failed. Please try a smaller batch or check your connection.");
+        console.error(e);
+    } finally {
+        setIsGenerating(false);
+    }
+  };
+
   const handleCopy = async () => {
+    const sampleJson = `[
+  {
+    "word": "Ephemeral",
+    "pos": "adjective",
+    "ipa": "/əˈfem(ə)rəl/",
+    "definition": "Lasting for a very short time.",
+    "bengali": "ক্ষণস্থায়ী বা অল্পস্থায়ী",
+    "family": "ephemerally (adv), ephemerality (n)",
+    "context": "The beauty of a sunset is ephemeral, fading into darkness in minutes.",
+    "synonyms": "transient, fleeting, momentary",
+    "antonyms": "permanent, eternal, lasting",
+    "difficulty": "Advanced",
+    "usage_notes": "[TRAP]: Don't confuse with 'ethereal' (delicate/heavenly). [MNEMONIC]: Think of an 'e-mail' that self-destructs after reading. [VIBE]: Literary and poetic."
+  },
+  {
+    "word": "Mellifluous",
+    "pos": "adjective",
+    "ipa": "/meˈlifluəs/",
+    "definition": "A voice or words that are sweet or musical; pleasant to hear.",
+    "bengali": "মধুর বা শ্রুতিমধুর",
+    "family": "mellifluously (adv)",
+    "context": "The singer's mellifluous voice filled the hall and captivated the audience.",
+    "synonyms": "sweet-sounding, dulcet, euphonious",
+    "antonyms": "cacophonous, harsh, grating",
+    "difficulty": "GRE",
+    "usage_notes": "[VIBE]: Very sophisticated. [CONTEXT]: Perfect for describing music, voices, or flowing water. [MNEMONIC]: 'Melli' sounds like 'Melody' + 'Fluous' sounds like 'Flowing'."
+  }
+]`;
     setError(null);
     try {
       if (navigator.clipboard && window.isSecureContext) {
@@ -113,127 +136,212 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        const successful = document.execCommand('copy');
+        document.execCommand('copy');
         document.body.removeChild(textArea);
-        if (!successful) throw new Error("Fallback copy failed");
       }
-      
       setCopyStatus('Copied!');
-      setTimeout(() => setCopyStatus('Copy Sample'), 2000);
+      setTimeout(() => setCopyStatus('Copy Sample JSON'), 2000);
     } catch (err) {
-      console.error('Failed to copy: ', err);
       setJsonInput(sampleJson);
-      setError("Clipboard access denied. Sample text has been loaded into the box below for manual copy.");
-      setCopyStatus('Copy Sample');
+      setCopyStatus('Copy Sample JSON');
     }
   };
 
   return (
     <div className="auth-overlay" onClick={onClose}>
-      <div 
-        className="auth-container" 
-        style={{ maxWidth: '420px', width: '95%' }}
-        onClick={(e) => e.stopPropagation()} 
-      >
+      <div className="auth-container bulk-import-container" onClick={(e) => e.stopPropagation()}>
         <div className="auth-header">
-          <h3>Bulk Import</h3>
-          <button 
-            onClick={onClose} 
-            aria-label="Close modal"
-            style={{ 
-              fontSize: '1.6rem', 
-              color: 'var(--text-secondary)',
-              padding: '4px 12px',
-              borderRadius: '8px',
-              background: 'var(--accent-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 300
-            }}
-          >
-            &lt;
-          </button>
+          <h3>Import Words</h3>
+          <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
+        </div>
+
+        <div className="import-tabs">
+            <button className={activeTab === 'json' ? 'active' : ''} onClick={() => setActiveTab('json')}>
+                Manual JSON
+            </button>
+            <button className={activeTab === 'ai' ? 'active' : ''} onClick={() => setActiveTab('ai')}>
+                ✨ AI Word List
+            </button>
         </div>
         
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Paste a JSON array of words. Duplicates are automatically merged, preserving your SRS progress while updating definitions.
-        </p>
+        <div className="tab-content">
+            {activeTab === 'json' ? (
+                <div className="json-mode">
+                    <p className="tab-hint">Paste an array of objects. Perfect for migrating between devices or manually curating lists.</p>
+                    
+                    {summary && (
+                        <div className="import-summary-pill">
+                            <span>Detected {summary.total} entries ({summary.unique} unique)</span>
+                        </div>
+                    )}
 
-        {summary && (
-            <div style={{ 
-                background: 'var(--accent-secondary)', 
-                color: 'var(--accent-primary)', 
-                padding: '10px 14px', 
-                borderRadius: '12px', 
-                fontSize: '0.8rem', 
-                fontWeight: '700',
-                marginBottom: '1rem',
-                display: 'flex',
-                justifyContent: 'space-between'
-            }}>
-                <span>Detected: {summary.total} entries</span>
-                <span>{summary.unique} unique words</span>
-            </div>
-        )}
+                    <textarea 
+                        className="import-textarea"
+                        placeholder="[{ 'word': 'apple', ... }]"
+                        value={jsonInput}
+                        onChange={(e) => setJsonInput(e.target.value)}
+                    />
+
+                    <div className="import-footer-actions">
+                        <button className="auth-btn sample-copy-btn" onClick={handleCopy}>
+                            {copyStatus === 'Copied!' ? '✅ Copied!' : '📋 Copy Sample'}
+                        </button>
+                        <button className="auth-btn primary" onClick={handleJsonImport} disabled={!jsonInput.trim()}>
+                            Import Words
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="ai-mode">
+                    <p className="tab-hint">Enter words separated by commas or new lines. Gemini will generate full flashcards for all of them.</p>
+                    
+                    <textarea 
+                        className="import-textarea ai-list"
+                        placeholder="Enter words here... (e.g. ephemeral, petrichor, mellifluous)"
+                        value={aiInput}
+                        onChange={(e) => setAiInput(e.target.value)}
+                        disabled={isGenerating}
+                    />
+
+                    <div className="import-footer-actions">
+                        <button 
+                            className={`auth-btn primary ai-gen-btn ${isGenerating ? 'loading' : ''}`} 
+                            onClick={handleAiGenerate}
+                            disabled={!aiInput.trim() || isGenerating}
+                        >
+                            {isGenerating ? (
+                                <>
+                                    <div className="spinner-mini"></div>
+                                    <span>AI Generating...</span>
+                                </>
+                            ) : (
+                                '✨ Generate & Import'
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
 
         {error && (
-          <div style={{ 
-            color: 'var(--danger-color)', 
-            fontSize: '0.8rem', 
-            marginBottom: '1rem', 
-            background: 'rgba(255, 59, 48, 0.1)', 
-            padding: '8px', 
-            borderRadius: '8px' 
-          }}>
-            {error}
-          </div>
+            <div className="import-error-msg">
+                ⚠️ {error}
+            </div>
         )}
-
-        <textarea 
-          style={{
-            width: '100%',
-            height: '180px',
-            background: 'var(--bg-color)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '12px',
-            padding: '12px',
-            fontFamily: 'monospace',
-            fontSize: '0.8rem',
-            color: 'var(--text-primary)',
-            marginBottom: '1rem',
-            resize: 'none'
-          }}
-          placeholder="Paste JSON here..."
-          value={jsonInput}
-          onChange={(e) => setJsonInput(e.target.value)}
-        />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <button 
-            className="auth-btn primary" 
-            onClick={handleImport}
-            disabled={!jsonInput.trim() || !!error}
-            style={{ padding: '16px' }}
-          >
-            {summary ? `Import ${summary.unique} Words` : 'Import All Words'}
-          </button>
-          
-          <button 
-            className="auth-btn" 
-            onClick={handleCopy} 
-            style={{ 
-              border: '2px solid var(--accent-primary)',
-              color: copyStatus === 'Copied!' ? 'var(--success-color)' : 'var(--accent-primary)',
-              fontWeight: '700',
-              background: 'var(--accent-secondary)',
-              padding: '14px'
-            }}
-          >
-            {copyStatus}
-          </button>
-        </div>
       </div>
+
+      <style>{`
+        .bulk-import-container {
+            max-width: 440px;
+            width: 95%;
+            padding: 1.5rem;
+        }
+
+        .import-tabs {
+            display: flex;
+            background: var(--accent-secondary);
+            padding: 4px;
+            border-radius: 14px;
+            margin-bottom: 1.5rem;
+        }
+        .import-tabs button {
+            flex: 1;
+            padding: 10px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            border-radius: 11px;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .import-tabs button.active {
+            background: var(--card-bg);
+            color: var(--accent-primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .tab-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin: 0 0 1rem 0;
+            line-height: 1.5;
+        }
+
+        .import-summary-pill {
+            background: var(--accent-secondary);
+            color: var(--accent-primary);
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 6px 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+
+        .import-textarea {
+            width: 100%;
+            height: 180px;
+            background: var(--bg-color);
+            border: 1.5px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1rem;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .import-textarea:focus { border-color: var(--accent-primary); }
+        .import-textarea.ai-list { font-family: var(--font-family); font-size: 1rem; font-weight: 600; }
+
+        .import-footer-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 1.25rem;
+        }
+        .import-footer-actions button { flex: 1; }
+
+        .sample-copy-btn {
+            background: var(--accent-secondary);
+            color: var(--accent-primary);
+            border: 1px solid var(--border-color);
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .ai-gen-btn {
+            background: linear-gradient(135deg, #5856d6 0%, #ff2d55 100%) !important;
+            color: white !important;
+            border: none !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .ai-gen-btn.loading { opacity: 0.8; }
+
+        .spinner-mini {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .import-error-msg {
+            margin-top: 1rem;
+            padding: 10px;
+            background: rgba(255, 59, 48, 0.08);
+            color: var(--danger-color);
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 };
