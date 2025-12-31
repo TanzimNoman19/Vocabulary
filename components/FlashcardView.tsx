@@ -12,6 +12,7 @@ import type { VisibilitySettings } from '../App';
 
 interface FlashcardViewProps {
   topic: string;
+  initialFlipped?: boolean;
   savedWords: string[];
   favoriteWords: string[];
   srsData: Record<string, SRSItem>;
@@ -19,7 +20,7 @@ interface FlashcardViewProps {
   onUpdateSRS: (word: string, grade: Grade) => void;
   onToggleSave: (word: string) => void;
   onToggleFavorite: (word: string) => void;
-  onNavigate: (word: string) => void;
+  onNavigate: (word: string, initialFlipped?: boolean) => void;
   onCacheUpdate: (word: string, data: CardData) => void;
   onOpenImport: () => void;
   isOnline: boolean;
@@ -27,9 +28,9 @@ interface FlashcardViewProps {
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({ 
-    topic, savedWords, favoriteWords, srsData, cardCache, onUpdateSRS, onToggleSave, onToggleFavorite, onNavigate, onCacheUpdate, onOpenImport, isOnline, visibilitySettings
+    topic, initialFlipped = false, savedWords, favoriteWords, srsData, cardCache, onUpdateSRS, onToggleSave, onToggleFavorite, onNavigate, onCacheUpdate, onOpenImport, isOnline, visibilitySettings
 }) => {
-  const [isFlipped, setIsFlipped] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(initialFlipped);
   const [data, setData] = useState<CardData>({
     pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: ''
   });
@@ -41,13 +42,13 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   useEffect(() => {
     if (topic && topic !== "__EMPTY_FALLBACK__") {
         loadTopic(topic);
+        setIsFlipped(initialFlipped);
     }
     setTooltip(null);
-  }, [topic, isOnline]);
+  }, [topic, initialFlipped, isOnline]);
 
   const loadTopic = async (word: string) => {
     activeTopic.current = word;
-    setIsFlipped(false);
     setErrorMsg(null);
 
     if (cardCache[word]) {
@@ -85,7 +86,20 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     const clientX = e.clientX;
     const clientY = e.clientY;
 
-    if (!isOnline && !cardCache[word]) {
+    // Use Cache if word is already saved or discovered
+    if (cardCache[word]) {
+        const cached = cardCache[word];
+        setTooltip({ 
+          word, 
+          text: `${cached.definition}\n${cached.bengali}`, 
+          pos: cached.pos ? `(${cached.pos})` : undefined,
+          x: clientX, 
+          y: clientY 
+        });
+        return;
+    }
+
+    if (!isOnline) {
         setTooltip({ word, text: 'No offline data for this word.', x: clientX, y: clientY });
         return;
     }
@@ -106,10 +120,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   const renderUsageNotes = (notes: any) => {
     if (!notes) return null;
     
-    // Safety check to ensure we are working with a string to avoid TypeError: str.split is not a function
     const notesStr = typeof notes === 'string' ? notes : String(notes);
-    
-    // Split by bracketed tags: [TRAP], [MNEMONIC], etc.
     const parts = notesStr.split(/(\[[A-Z-]+\]:?)/g).filter(Boolean);
     
     return (
@@ -241,7 +252,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                                 <span 
                                     className="chip" 
                                     key={f} 
-                                    onClick={(e) => { e.stopPropagation(); onNavigate(clean); }}
+                                    onClick={(e) => { e.stopPropagation(); onNavigate(clean, true); }}
                                 >
                                     {f}
                                 </span>
@@ -263,7 +274,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                       <div className="sa-column">
                         <div className="section-label">SYNONYMS</div>
                         <div className="chip-container">
-                          {synonymsList.map(s => <span className="chip" key={s} onClick={(e) => { e.stopPropagation(); onNavigate(s); }}>{s}</span>)}
+                          {synonymsList.map(s => <span className="chip" key={s} onClick={(e) => { e.stopPropagation(); onNavigate(s, true); }}>{s}</span>)}
                         </div>
                       </div>
                     )}
@@ -271,7 +282,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                       <div className="sa-column">
                         <div className="section-label">ANTONYMS</div>
                         <div className="chip-container">
-                          {antonymsList.map(s => <span className="chip" key={s} onClick={(e) => { e.stopPropagation(); onNavigate(s); }}>{s}</span>)}
+                          {antonymsList.map(s => <span className="chip" key={s} onClick={(e) => { e.stopPropagation(); onNavigate(s, true); }}>{s}</span>)}
                         </div>
                       </div>
                     )}
@@ -303,9 +314,9 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
              Got It
           </button>
-          <button className="skip-action-btn next-btn" onClick={() => onNavigate('__RANDOM__')}>
+          <button className="skip-action-btn next-btn" onClick={() => onNavigate('__RANDOM__', false)}>
              Next Word
-             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
           </button>
       </div>
 
@@ -313,7 +324,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
           <WordTooltip 
               word={tooltip.word} text={tooltip.text} pos={tooltip.pos}
               x={tooltip.x} y={tooltip.y} 
-              onOpen={() => { onNavigate(tooltip.word); setTooltip(null); }}
+              onOpen={() => { onNavigate(tooltip.word, true); setTooltip(null); }}
               onClose={() => setTooltip(null)}
           />
       )}

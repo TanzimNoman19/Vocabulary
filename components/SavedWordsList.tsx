@@ -14,7 +14,7 @@ interface SavedWordsListProps {
   trashedWords: string[];
   srsData: Record<string, SRSItem>;
   cardCache: Record<string, CardData>;
-  onNavigate: (word: string) => void;
+  onNavigate: (word: string, initialFlipped?: boolean) => void;
   onDeleteMultiple: (words: string[]) => void;
   onRestoreFromTrash: (words: string[]) => void;
   onPermanentDelete: (words: string[]) => void;
@@ -105,7 +105,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     if (selectionMode) {
         toggleSelection(word);
     } else {
-        onNavigate(word);
+        onNavigate(word, true); // Start flipped when navigating from Library
     }
   };
 

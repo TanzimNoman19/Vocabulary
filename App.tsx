@@ -63,6 +63,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTrashOpen, setIsTrashOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [shouldStartFlipped, setShouldStartFlipped] = useState(false);
 
   // Background Sync Queue
   const syncQueue = useRef<string[]>([]);
@@ -79,8 +80,8 @@ const App: React.FC = () => {
       if (word && !cardCache[word]) {
         try {
           const data = await fetchWordData(word);
-          setCardCache(prev => ({ ...prev, [word]: data }));
-          // Throttling to respect API quotas
+          // When auto-filling library in background, we use the shared cache update logic
+          handleCacheUpdate(word, data);
           await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (e) {
           console.warn(`Background sync failed for ${word}`);
@@ -92,7 +93,6 @@ const App: React.FC = () => {
     setIsSyncing(false);
   };
 
-  // Trigger sync when online or library changes
   useEffect(() => {
     const missing = savedWords.filter(w => !cardCache[w]);
     if (missing.length > 0 && isOnline) {
@@ -162,16 +162,19 @@ const App: React.FC = () => {
   const handleRandom = () => {
       if (savedWords.length > 0) {
           const dueCached = getDueWords(savedWords, srsData);
-          setCurrentTopic(dueCached[0] || savedWords[Math.floor(Math.random() * savedWords.length)]);
+          const nextWord = dueCached[0] || savedWords[Math.floor(Math.random() * savedWords.length)];
+          setShouldStartFlipped(false);
+          setCurrentTopic(nextWord);
       } else {
           setCurrentTopic("__EMPTY_FALLBACK__");
       }
   };
 
-  const handleNavigate = (word: string) => {
+  const handleNavigate = (word: string, initialFlipped: boolean = false) => {
       if (word === '__RANDOM__') {
           handleRandom();
       } else {
+          setShouldStartFlipped(initialFlipped);
           setCurrentTopic(word);
       }
       setActiveTab('home');
@@ -189,6 +192,21 @@ const App: React.FC = () => {
               if (!srsData[word]) setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
           }
       }
+  };
+
+  const handleCacheUpdate = (word: string, data: CardData) => {
+    // Basic validation to avoid saving "broken" or empty data
+    if (!data.definition || data.definition.includes("pending download")) return;
+
+    setCardCache(prev => ({ ...prev, [word]: data }));
+    
+    // Auto-save logic: If word is successfully generated, add to library
+    if (word !== "__EMPTY_FALLBACK__" && !savedWords.includes(word)) {
+      setSavedWords(prev => [word, ...prev]);
+      if (!srsData[word]) {
+        setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
+      }
+    }
   };
 
   const handleImportWords = (importedCache: Record<string, CardData>) => {
@@ -231,7 +249,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Handle Word Renaming
     setCardCache(prev => {
       const next = { ...prev, [newWord]: newData };
       delete next[oldWord];
@@ -377,7 +394,7 @@ const App: React.FC = () => {
         )}
         
         {activeTab === 'home' && (
-            <FlashcardView topic={currentTopic} savedWords={savedWords} favoriteWords={favoriteWords} srsData={srsData} cardCache={cardCache} onUpdateSRS={handleSRSUpdate} onToggleSave={handleToggleSave} onToggleFavorite={handleToggleFavorite} onNavigate={handleNavigate} onCacheUpdate={(w, d) => setCardCache(prev => ({ ...prev, [w]: d }))} onOpenImport={() => setIsBulkImportOpen(true)} isOnline={isOnline} visibilitySettings={visibilitySettings} />
+            <FlashcardView topic={currentTopic} initialFlipped={shouldStartFlipped} savedWords={savedWords} favoriteWords={favoriteWords} srsData={srsData} cardCache={cardCache} onUpdateSRS={handleSRSUpdate} onToggleSave={handleToggleSave} onToggleFavorite={handleToggleFavorite} onNavigate={handleNavigate} onCacheUpdate={handleCacheUpdate} onOpenImport={() => setIsBulkImportOpen(true)} isOnline={isOnline} visibilitySettings={visibilitySettings} />
         )}
         {activeTab === 'saved' && (
             <SavedWordsList 
@@ -399,7 +416,6 @@ const App: React.FC = () => {
 
       <div className="bottom-nav-container">
         <nav className="bottom-nav">
-            {/* Sliding Liquid Indicator */}
             <div className={`nav-indicator pos-${activeTab}`} />
             
             <button className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>

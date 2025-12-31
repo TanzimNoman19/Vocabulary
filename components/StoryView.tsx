@@ -1,9 +1,10 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useState, useRef, useEffect } from 'react';
-import { generateStorySegment, getShortDefinition, generateCreativePrompt } from '../services/geminiService';
+import { generateStorySegment, getShortDefinition, generateCreativePrompt, CardData } from '../services/geminiService';
 import WordTooltip from './WordTooltip';
 
 export interface StoryState {
@@ -18,9 +19,10 @@ interface StoryViewProps {
   onNavigate: (word: string) => void;
   state: StoryState;
   onUpdateState: (newState: Partial<StoryState>) => void;
+  cardCache: Record<string, CardData>; // Added cache prop
 }
 
-const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpdateState }) => {
+const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpdateState, cardCache }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPromptLoading, setIsPromptLoading] = useState(false);
 
@@ -68,7 +70,6 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
 
   // Next Part
   const handleNextPart = async () => {
-    // If we already have the next segment in history, just move forward
     if (state.currentIndex < state.segments.length - 1) {
       onUpdateState({ currentIndex: state.currentIndex + 1 });
       return;
@@ -95,33 +96,32 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
     }
   };
 
-  // --- Interactive Word Logic ---
-
   const handleWordClick = async (e: React.MouseEvent, word: string) => {
     e.stopPropagation();
-    
-    // Calculate position
     const clientX = e.clientX;
     const clientY = e.clientY;
+
+    // Check Cache first
+    if (cardCache[word]) {
+      const cached = cardCache[word];
+      setTooltip({ 
+        word, 
+        text: `${cached.definition}\n${cached.bengali}`, 
+        pos: cached.pos ? `(${cached.pos})` : undefined, 
+        x: clientX, 
+        y: clientY 
+      });
+      return;
+    }
 
     setTooltip({ word, text: 'Loading...', x: clientX, y: clientY });
     
     try {
         const fullDef = await getShortDefinition(word);
-        
-        // Parse POS and Definition based on format: "(pos) Definition"
-        // Use [\s\S]* to match newlines correctly for the Bengali definition
         const match = fullDef.match(/^(\([a-z.]+\))\s*([\s\S]*)/i);
-        
         let pos = '';
         let defText = fullDef;
-
-        if (match) {
-            pos = match[1];
-            defText = match[2];
-        }
-
-        // Only update if the tooltip is still open and for the same word
+        if (match) { pos = match[1]; defText = match[2]; }
         setTooltip(prev => (prev && prev.word === word ? { ...prev, text: defText, pos: pos } : prev));
     } catch (err) {
         setTooltip(prev => (prev && prev.word === word ? { ...prev, text: "Definition unavailable" } : prev));
@@ -135,7 +135,6 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
     }
   };
 
-  // Helper to render story text
   const renderInteractiveText = (text: string) => {
     const words = text.split(/(\s+)/).filter(Boolean);
     return words.map((word, i) => {
