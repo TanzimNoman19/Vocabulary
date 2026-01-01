@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -131,11 +130,16 @@ export async function fetchWordData(word: string, definitionStyle: string = 'sta
   }
 }
 
-export async function fetchExplorePack(level: VocabLevel = 'intermediate', count: number = 10): Promise<CardData[]> {
+export async function fetchExplorePack(level: VocabLevel = 'intermediate', count: number = 10, excludeWords: string[] = []): Promise<CardData[]> {
   if (!navigator.onLine) throw new Error("Offline: Cannot explore new words.");
 
   const ai = getAIClient();
+  const excludeInstruction = excludeWords.length > 0 
+    ? `CRITICAL: Do not include any of these words in the output: ${excludeWords.slice(-200).join(', ')}.`
+    : '';
+
   const prompt = `Generate a pack of ${count} unique, interesting English vocabulary words suitable for a ${level} level learner.
+  ${excludeInstruction}
   Return a JSON array of objects. Each object must contain:
   "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
   

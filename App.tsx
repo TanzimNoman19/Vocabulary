@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -224,6 +223,9 @@ const App: React.FC = () => {
               setExploreIndex(nextIdx);
               setShouldStartFlipped(false);
               setCurrentTopic(capitalize(explorePack[nextIdx]));
+          } else {
+              // End of current cumulative pack, trigger automatic generation of next pack
+              handleToggleExplore(true);
           }
           return;
       }
@@ -249,7 +251,7 @@ const App: React.FC = () => {
             setCurrentTopic(capitalize(explorePack[prevIdx]));
           }
       } else if (word === '__GENERATE__') {
-          handleToggleExplore(true); // Forced regeneration for next pack
+          handleToggleExplore(true); // Explicit regeneration
       } else {
           setShouldStartFlipped(initialFlipped);
           setCurrentTopic(capitalize(word));
@@ -295,9 +297,22 @@ const App: React.FC = () => {
       }
       setIsExploring(true);
       try {
-        const pack = await fetchExplorePack('intermediate', explorePackSize);
+        // Exclude both saved words and already explored words in this session
+        const wordsToExclude = [...savedWords, ...explorePack];
+        const pack = await fetchExplorePack('intermediate', explorePackSize, wordsToExclude);
+        
         if (pack.length > 0) {
-          const packWords = pack.map(p => capitalize(p.word!)).filter(Boolean);
+          // Robust filter to ensure strictly no duplicates
+          const newPackWords = pack
+            .map(p => capitalize(p.word!))
+            .filter(w => w && !savedWords.includes(w) && !explorePack.includes(w));
+          
+          if (newPackWords.length === 0) {
+              alert("Gemini couldn't find unique words that aren't already in your library. Try changing the level or count.");
+              setIsExploring(false);
+              return;
+          }
+
           const newCache = { ...cardCache };
           pack.forEach(p => { 
             if(p.word) {
@@ -307,12 +322,22 @@ const App: React.FC = () => {
           });
           setCardCache(newCache);
           
-          setExplorePack(packWords);
-          setExploreIndex(0);
-          setIsExploreMode(true);
+          if (forceNext && isExploreMode) {
+              // APPEND mode: Add to existing session list
+              const nextIdx = explorePack.length;
+              setExplorePack(prev => [...prev, ...newPackWords]);
+              setExploreIndex(nextIdx);
+              setCurrentTopic(newPackWords[0]);
+          } else {
+              // INITIAL mode: Start new session
+              setExplorePack(newPackWords);
+              setExploreIndex(0);
+              setIsExploreMode(true);
+              setCurrentTopic(newPackWords[0]);
+          }
+          
           setShouldStartFlipped(false);
-          setCurrentTopic(packWords[0]);
-          handleCacheUpdate(packWords[0], pack[0]);
+          handleCacheUpdate(newPackWords[0], pack.find(p => capitalize(p.word!) === newPackWords[0]) || pack[0]);
         }
       } catch (e) {
         alert("Failed to fetch explore pack. Try again later.");
