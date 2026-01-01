@@ -214,7 +214,8 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 }
                 else if (mastery > 0 || (mastery === 0 && revCount > 0)) { 
                     badgeClass = 'learning'; 
-                    badgeText = revCount > 1 && mastery === 0 ? 'RE-LEARNING' : 'LEARNING'; 
+                    // Renamed RE-LEARNING to LEARNING per request
+                    badgeText = 'LEARNING'; 
                 }
 
                 return (

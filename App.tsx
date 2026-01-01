@@ -5,7 +5,7 @@
 */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchWordData, CardData } from './services/dictionaryService';
+import { fetchWordData, CardData, fetchExplorePack } from './services/dictionaryService';
 import { SRSItem, calculateSRS, initializeSRSItem, getDueWords } from './services/srsService';
 import { supabase, saveUserData, getUserData } from './services/supabaseClient';
 import FlashcardView from './components/FlashcardView';
@@ -65,22 +65,25 @@ const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [shouldStartFlipped, setShouldStartFlipped] = useState(false);
 
+  // Explore Mode State
+  const [isExploreMode, setIsExploreMode] = useState(false);
+  const [explorePack, setExplorePack] = useState<string[]>([]);
+  const [exploreIndex, setExploreIndex] = useState(-1);
+  const [isExploring, setIsExploring] = useState(false);
+
   // Background Sync Queue
   const syncQueue = useRef<string[]>([]);
   const isSyncProcessing = useRef(false);
 
   const processSyncQueue = async () => {
     if (isSyncProcessing.current || !isOnline || syncQueue.current.length === 0) return;
-    
     isSyncProcessing.current = true;
     setIsSyncing(true);
-
     while (syncQueue.current.length > 0 && isOnline) {
       const word = syncQueue.current.shift();
       if (word && !cardCache[word]) {
         try {
           const data = await fetchWordData(word);
-          // When auto-filling library in background, we use the shared cache update logic
           handleCacheUpdate(word, data);
           await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (e) {
@@ -88,7 +91,6 @@ const App: React.FC = () => {
         }
       }
     }
-
     isSyncProcessing.current = false;
     setIsSyncing(false);
   };
@@ -149,17 +151,25 @@ const App: React.FC = () => {
       setUser(activeUser);
       if (activeUser && isOnline) loadDataFromSupabase(activeUser.id);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const activeUser = session?.user ?? null;
       setUser(activeUser);
       if (activeUser && isOnline) loadDataFromSupabase(activeUser.id);
     });
-
     return () => subscription.unsubscribe();
   }, [isOnline, loadDataFromSupabase]);
 
   const handleRandom = () => {
+      if (isExploreMode && explorePack.length > 0) {
+          const nextIdx = exploreIndex + 1;
+          if (nextIdx < explorePack.length) {
+              setExploreIndex(nextIdx);
+              setShouldStartFlipped(false);
+              setCurrentTopic(explorePack[nextIdx]);
+          }
+          return;
+      }
+
       if (savedWords.length > 0) {
           const dueCached = getDueWords(savedWords, srsData);
           const nextWord = dueCached[0] || savedWords[Math.floor(Math.random() * savedWords.length)];
@@ -173,6 +183,15 @@ const App: React.FC = () => {
   const handleNavigate = (word: string, initialFlipped: boolean = false) => {
       if (word === '__RANDOM__') {
           handleRandom();
+      } else if (word === '__PREV__') {
+          if (isExploreMode && exploreIndex > 0) {
+            const prevIdx = exploreIndex - 1;
+            setExploreIndex(prevIdx);
+            setShouldStartFlipped(true);
+            setCurrentTopic(explorePack[prevIdx]);
+          }
+      } else if (word === '__GENERATE__') {
+          handleToggleExplore(true); // Forced regeneration for next pack
       } else {
           setShouldStartFlipped(initialFlipped);
           setCurrentTopic(word);
@@ -195,16 +214,45 @@ const App: React.FC = () => {
   };
 
   const handleCacheUpdate = (word: string, data: CardData) => {
-    // Basic validation to avoid saving "broken" or empty data
     if (!data.definition || data.definition.includes("pending download")) return;
-
     setCardCache(prev => ({ ...prev, [word]: data }));
-    
-    // Auto-save logic: If word is successfully generated, add to library
     if (word !== "__EMPTY_FALLBACK__" && !savedWords.includes(word)) {
       setSavedWords(prev => [word, ...prev]);
-      if (!srsData[word]) {
-        setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
+      if (!srsData[word]) setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
+    }
+  };
+
+  const handleToggleExplore = async (forceNext: boolean = false) => {
+    if (isExploreMode && !forceNext) {
+      setIsExploreMode(false);
+      setExplorePack([]);
+      setExploreIndex(-1);
+      handleRandom();
+    } else {
+      if (!isOnline) {
+        alert("Connect to the internet to use Explore mode.");
+        return;
+      }
+      setIsExploring(true);
+      try {
+        const pack = await fetchExplorePack('intermediate');
+        if (pack.length > 0) {
+          const packWords = pack.map(p => p.word!).filter(Boolean);
+          const newCache = { ...cardCache };
+          pack.forEach(p => { if(p.word) newCache[p.word] = p; });
+          setCardCache(newCache);
+          
+          setExplorePack(packWords);
+          setExploreIndex(0);
+          setIsExploreMode(true);
+          setShouldStartFlipped(false);
+          setCurrentTopic(packWords[0]);
+          handleCacheUpdate(packWords[0], pack[0]);
+        }
+      } catch (e) {
+        alert("Failed to fetch explore pack. Try again later.");
+      } finally {
+        setIsExploring(false);
       }
     }
   };
@@ -213,31 +261,22 @@ const App: React.FC = () => {
       const importedWordList = Object.keys(importedCache);
       const existingWordSet = new Set(savedWords.map(w => w.toLowerCase()));
       const trashedWordSet = new Set(trashedWords.map(w => w.toLowerCase()));
-      
       const newWords: string[] = [];
-      const updatedWords: string[] = [];
-
       importedWordList.forEach(word => {
           const lowerWord = word.toLowerCase();
-          if (existingWordSet.has(lowerWord)) {
-              updatedWords.push(word);
-          } else {
+          if (!existingWordSet.has(lowerWord)) {
               newWords.push(word);
               if (trashedWordSet.has(lowerWord)) {
                   setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
               }
           }
       });
-
       setCardCache(prev => ({ ...prev, ...importedCache }));
-
       if (newWords.length > 0) {
           setSavedWords(prev => [...newWords, ...prev]);
           setSrsData(prev => {
               const next = { ...prev };
-              newWords.forEach(w => {
-                  if (!next[w]) next[w] = initializeSRSItem(w);
-              });
+              newWords.forEach(w => { if (!next[w]) next[w] = initializeSRSItem(w); });
               return next;
           });
       }
@@ -248,13 +287,11 @@ const App: React.FC = () => {
       setCardCache(prev => ({ ...prev, [newWord]: newData }));
       return;
     }
-
     setCardCache(prev => {
       const next = { ...prev, [newWord]: newData };
       delete next[oldWord];
       return next;
     });
-
     setSrsData(prev => {
       const next = { ...prev };
       if (next[oldWord]) {
@@ -263,13 +300,9 @@ const App: React.FC = () => {
       }
       return next;
     });
-
     setSavedWords(prev => prev.map(w => w === oldWord ? newWord : w));
     setFavoriteWords(prev => prev.map(w => w === oldWord ? newWord : w));
-    
-    if (currentTopic === oldWord) {
-      setCurrentTopic(newWord);
-    }
+    if (currentTopic === oldWord) setCurrentTopic(newWord);
   };
 
   const handleMoveToTrash = (words: string[]) => {
@@ -297,15 +330,16 @@ const App: React.FC = () => {
   };
 
   const handleToggleFavorite = (word: string) => {
-      const isFav = favoriteWords.some(w => w.toLowerCase() === word.toLowerCase());
+      const lowerWord = word.toLowerCase();
+      const isFav = favoriteWords.some(w => w.toLowerCase() === lowerWord);
       if (isFav) {
-          setFavoriteWords(prev => prev.filter(w => w.toLowerCase() !== word.toLowerCase()));
+          setFavoriteWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
       } else {
           setFavoriteWords(prev => [word, ...prev]);
           if (!savedWords.includes(word)) setSavedWords(prev => [word, ...prev]);
           if (!srsData[word]) setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
           if (trashedWords.includes(word)) {
-              setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== word.toLowerCase()));
+              setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
           }
       }
   };
@@ -321,9 +355,7 @@ const App: React.FC = () => {
   const handleResetSRS = () => {
     setSrsData(prev => {
       const next: Record<string, SRSItem> = {};
-      Object.keys(prev).forEach(word => {
-        next[word] = initializeSRSItem(word);
-      });
+      Object.keys(prev).forEach(word => { next[word] = initializeSRSItem(word); });
       return next;
     });
   };
@@ -335,11 +367,21 @@ const App: React.FC = () => {
       <header className="app-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className="logo-text">LexiFlow</div>
-          {isSyncing && <div className="sync-spinner" title="Syncing library for offline use..."></div>}
+          {(isSyncing || isExploring) && <div className="sync-spinner"></div>}
         </div>
         <div className="header-actions">
             {!isOnline && <span className="offline-badge-pill">OFFLINE</span>}
             
+            {activeTab === 'home' && (
+               <button 
+                className={`header-explore-btn ${isExploreMode ? 'active' : ''}`} 
+                onClick={() => handleToggleExplore()}
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M21 17v4"/><path d="M19 19h4"/></svg>
+                 <span>Explore</span>
+               </button>
+            )}
+
             {activeTab === 'saved' && (
               <div className="header-dynamic-actions" style={{ display: 'flex', gap: '8px' }}>
                 <button className="icon-btn header-import-btn" onClick={() => setIsBulkImportOpen(true)} title="Import Words">
@@ -353,15 +395,7 @@ const App: React.FC = () => {
 
             <button className="icon-btn header-settings-btn" onClick={() => setIsSettingsOpen(true)} title="Card Settings">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="4" y1="21" x2="4" y2="14"></line>
-                  <line x1="4" y1="10" x2="4" y2="3"></line>
-                  <line x1="12" y1="21" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12" y2="3"></line>
-                  <line x1="20" y1="21" x2="20" y2="16"></line>
-                  <line x1="20" y1="12" x2="20" y2="3"></line>
-                  <line x1="1" y1="14" x2="7" y2="14"></line>
-                  <line x1="9" y1="8" x2="15" y2="8"></line>
-                  <line x1="17" y1="16" x2="23" y2="16"></line>
+                  <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>
                 </svg>
             </button>
             <button className="icon-btn header-theme-btn" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} title="Toggle Theme">
@@ -394,7 +428,24 @@ const App: React.FC = () => {
         )}
         
         {activeTab === 'home' && (
-            <FlashcardView topic={currentTopic} initialFlipped={shouldStartFlipped} savedWords={savedWords} favoriteWords={favoriteWords} srsData={srsData} cardCache={cardCache} onUpdateSRS={handleSRSUpdate} onToggleSave={handleToggleSave} onToggleFavorite={handleToggleFavorite} onNavigate={handleNavigate} onCacheUpdate={handleCacheUpdate} onOpenImport={() => setIsBulkImportOpen(true)} isOnline={isOnline} visibilitySettings={visibilitySettings} />
+            <FlashcardView 
+              topic={currentTopic} 
+              initialFlipped={shouldStartFlipped} 
+              savedWords={savedWords} 
+              favoriteWords={favoriteWords} 
+              srsData={srsData} 
+              cardCache={cardCache} 
+              onUpdateSRS={handleSRSUpdate} 
+              onToggleSave={handleToggleSave} 
+              onToggleFavorite={handleToggleFavorite} 
+              onNavigate={handleNavigate} 
+              onCacheUpdate={handleCacheUpdate} 
+              onOpenImport={() => setIsBulkImportOpen(true)} 
+              isOnline={isOnline} 
+              visibilitySettings={visibilitySettings}
+              isExploreMode={isExploreMode}
+              exploreProgress={isExploreMode ? { current: exploreIndex + 1, total: explorePack.length } : undefined}
+            />
         )}
         {activeTab === 'saved' && (
             <SavedWordsList 
@@ -447,13 +498,32 @@ const App: React.FC = () => {
           border: 1px solid var(--border-color);
           flex-shrink: 0;
         }
-        .icon-btn:hover {
+        .header-explore-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 12px;
+            background: var(--accent-secondary);
+            color: var(--accent-primary);
+            font-size: 0.75rem;
+            font-weight: 800;
+            border: 1.5px solid var(--border-color);
+            transition: all 0.2s;
+            margin-right: 4px;
+        }
+        .header-explore-btn.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+            box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2);
+        }
+        .icon-btn:hover, .header-explore-btn:hover {
           background: var(--border-color);
           border-color: var(--accent-primary);
         }
-        .icon-btn:active {
+        .icon-btn:active, .header-explore-btn:active {
           transform: scale(0.92);
-          background: var(--accent-secondary);
         }
         .header-trash-btn.not-empty {
           position: relative;
@@ -469,6 +539,15 @@ const App: React.FC = () => {
           border-radius: 50%;
           border: 2.5px solid var(--bg-color);
         }
+        .sync-spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(88, 86, 214, 0.1);
+          border-top: 2px solid var(--accent-primary);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

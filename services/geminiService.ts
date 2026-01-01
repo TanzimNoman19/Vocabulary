@@ -12,14 +12,10 @@ import { getCachedDefinition, saveCachedDefinition } from './supabaseClient';
 export type WordSource = 'ai' | 'free' | 'local';
 
 let ai: GoogleGenAI;
+// Fixed: Using process.env.API_KEY directly as per SDK guidelines
 const getAiClient = () => {
   if (!ai) {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      ai = new GoogleGenAI({apiKey: 'MISSING_KEY'}); 
-    } else {
-      ai = new GoogleGenAI({apiKey: apiKey});
-    }
+    ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
   return ai;
 };

@@ -25,10 +25,13 @@ interface FlashcardViewProps {
   onOpenImport: () => void;
   isOnline: boolean;
   visibilitySettings: VisibilitySettings;
+  isExploreMode?: boolean;
+  exploreProgress?: { current: number, total: number };
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({ 
-    topic, initialFlipped = false, savedWords, favoriteWords, srsData, cardCache, onUpdateSRS, onToggleSave, onToggleFavorite, onNavigate, onCacheUpdate, onOpenImport, isOnline, visibilitySettings
+    topic, initialFlipped = false, savedWords, favoriteWords, srsData, cardCache, onUpdateSRS, onToggleSave, onToggleFavorite, onNavigate, onCacheUpdate, onOpenImport, isOnline, visibilitySettings,
+    isExploreMode = false, exploreProgress
 }) => {
   const [isFlipped, setIsFlipped] = useState(initialFlipped);
   const [data, setData] = useState<CardData>({
@@ -86,7 +89,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     const clientX = e.clientX;
     const clientY = e.clientY;
 
-    // Use Cache if word is already saved or discovered
     if (cardCache[word]) {
         const cached = cardCache[word];
         setTooltip({ 
@@ -119,7 +121,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
   const renderUsageNotes = (notes: any) => {
     if (!notes) return null;
-    
     const notesStr = typeof notes === 'string' ? notes : String(notes);
     const parts = notesStr.split(/(\[[A-Z-]+\]:?)/g).filter(Boolean);
     
@@ -144,11 +145,11 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                   <div style={{ fontSize: '3.5rem', marginBottom: '1.5rem' }}>📚</div>
                   <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Library is Empty</h2>
                   <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '0 1rem', lineHeight: '1.5', fontSize: '0.95rem' }}>
-                      Start building your personalized library to begin your learning journey.
+                      Start building your personalized library or try Explore mode.
                   </p>
-                  <button className="auth-btn primary" style={{ marginTop: '2rem' }} onClick={onOpenImport}>
-                      Import Words
-                  </button>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '2rem' }}>
+                    <button className="auth-btn primary" onClick={onOpenImport}>Import Words</button>
+                  </div>
               </div>
           </div>
       );
@@ -158,9 +159,10 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   const srsItem = srsData[topic];
   
   const getStatusLabel = () => {
+    if (isExploreMode) return `DISCOVERING ${exploreProgress?.current}/${exploreProgress?.total}`;
     if (!srsItem || srsItem.reviewCount === 0) return 'NEW WORD';
     if (srsItem.masteryLevel >= 5) return 'MASTERED';
-    if (srsItem.masteryLevel === 0 && srsItem.reviewCount > 0) return 'RE-LEARNING';
+    // Simplified status labels: merged RE-LEARNING into LEARNING for a cleaner look
     return 'LEARNING';
   };
 
@@ -197,7 +199,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem', fontSize: '0.9rem' }}>{errorMsg}</p>
            ) : (
                <>
-                <div className={`status-badge ${statusLabel.replace(' ', '-').toLowerCase()}`}>{statusLabel}</div>
+                <div className={`status-badge ${isExploreMode ? 'explore-badge' : statusLabel.replace(' ', '-').toLowerCase()}`}>{statusLabel}</div>
                 <div className="tap-hint">{isLoading ? 'Fetching details...' : 'Tap to reveal details'}</div>
                </>
            )}
@@ -302,7 +304,8 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>
                  Source: {data.source || 'Local Cache'}
                </span>
-               <button className="action-btn" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'dont_know'); }}>
+               {/* Swapped order to place button on the right side */}
+               <button className="action-btn-back" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'dont_know'); }}>
                   Review Again
                </button>
            </div>
@@ -310,14 +313,45 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
       </div>
       
       <div className="external-actions">
-          <button className="skip-action-btn know-btn" onClick={() => onUpdateSRS(topic, 'know')}>
-             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-             Got It
-          </button>
-          <button className="skip-action-btn next-btn" onClick={() => onNavigate('__RANDOM__', false)}>
-             Next Word
-             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
+        {!isExploreMode ? (
+            /* Classic review layout */
+            <>
+                <button className="skip-action-btn know-btn" onClick={() => onUpdateSRS(topic, 'know')}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Got It
+                </button>
+                <button className="skip-action-btn next-btn" onClick={() => onNavigate('__RANDOM__', false)}>
+                    Next Word
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+            </>
+        ) : (
+            /* New 3-button Explore layout */
+            <>
+                <button 
+                    className="nav-icon-btn" 
+                    onClick={() => onNavigate('__PREV__')} 
+                    disabled={exploreProgress?.current === 1}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                
+                <button className="skip-action-btn know-btn middle" onClick={() => onUpdateSRS(topic, 'know')}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Already Knew
+                </button>
+
+                {exploreProgress?.current === exploreProgress?.total ? (
+                    <button className="nav-icon-btn primary-gen" onClick={() => onNavigate('__GENERATE__')}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/></svg>
+                    </button>
+                ) : (
+                    <button className="nav-icon-btn" onClick={() => onNavigate('__RANDOM__')}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </button>
+                )}
+            </>
+        )}
       </div>
 
       {tooltip && (
@@ -330,6 +364,59 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
       )}
 
       <style>{`
+          .card-back-footer {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 1rem 1.5rem;
+              border-top: 1px solid var(--border-color);
+              background: var(--card-bg);
+          }
+          .action-btn-back {
+              padding: 8px 14px;
+              border-radius: 10px;
+              font-weight: 700;
+              font-size: 0.75rem;
+              background: var(--accent-secondary);
+              color: var(--accent-primary);
+              border: 1px solid var(--border-color);
+          }
+          .action-btn-back:active { transform: scale(0.95); }
+
+          .nav-icon-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s;
+            flex-shrink: 0;
+          }
+          .nav-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+          .nav-icon-btn:active:not(:disabled) { transform: scale(0.9); background: var(--accent-secondary); }
+          .nav-icon-btn.primary-gen { 
+            background: var(--accent-primary); 
+            color: white; 
+            border-color: var(--accent-primary);
+            animation: pulse-gen 2s infinite;
+          }
+          @keyframes pulse-gen {
+              0% { box-shadow: 0 0 0 0 rgba(88, 86, 214, 0.4); }
+              70% { box-shadow: 0 0 0 10px rgba(88, 86, 214, 0); }
+              100% { box-shadow: 0 0 0 0 rgba(88, 86, 214, 0); }
+          }
+
+          .status-badge.explore-badge {
+            background: linear-gradient(135deg, #5856d6 0%, #ff2d55 100%);
+            color: white;
+            border: none;
+          }
+          
           .usage-box-container {
               display: flex;
               flex-direction: column;

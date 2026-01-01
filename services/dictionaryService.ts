@@ -20,15 +20,17 @@ export interface CardData {
   etymology?: string;
   usage_notes?: string;
   source?: string;
+  word?: string;
 }
 
 export type VocabLevel = 'basic' | 'intermediate' | 'gre' | 'ielts' | 'expert';
 
 let aiInstance: GoogleGenAI | null = null;
 
+// Fixed: Using process.env.API_KEY directly as per SDK guidelines
 const getAIClient = () => {
   if (!aiInstance) {
-    aiInstance = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+    aiInstance = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
   return aiInstance;
 };
@@ -89,11 +91,7 @@ export async function fetchWordData(word: string, retries = 1): Promise<CardData
   
   RULES:
   1. "bengali": Provide an elaborative, descriptive Bengali definition. NO phonetic English in parentheses.
-  2. "usage_notes": BE CREATIVE AND STRUCTURED. Use these labels to provide practical tips:
-     - [TRAP]: Mention similar-looking or similar-sounding words that might confuse a learner.
-     - [MNEMONIC]: Provide a clever memory trick or visual association.
-     - [VIBE]: Describe the "feeling" of the word (e.g., Formal, Romantic, Academic, Aggressive).
-     - [TIP]: A quick rule of thumb for using it correctly.
+  2. "usage_notes": BE CREATIVE AND STRUCTURED. Use these labels: [TRAP], [MNEMONIC], [VIBE], [TIP].
   3. Format: Raw JSON only.`;
 
   try {
@@ -123,6 +121,47 @@ export async function fetchWordData(word: string, retries = 1): Promise<CardData
       return fetchWordData(word, retries - 1);
     }
     return localFallback;
+  }
+}
+
+/**
+ * Generates a pack of 10 unique, high-quality words in one API call.
+ */
+export async function fetchExplorePack(level: VocabLevel = 'intermediate'): Promise<CardData[]> {
+  if (!navigator.onLine) throw new Error("Offline: Cannot explore new words.");
+
+  const ai = getAIClient();
+  const prompt = `Generate a pack of 10 unique, interesting English vocabulary words suitable for a ${level} level learner.
+  Return a JSON array of objects. Each object must contain:
+  "word", "pos", "ipa", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
+  
+  RULES:
+  1. Avoid extremely common words. Focus on descriptive, academic, or literary terms.
+  2. "bengali": Precise meaning.
+  3. "usage_notes": Use [TRAP], [MNEMONIC], [VIBE] labels.
+  Format: Raw JSON array only.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { 
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 }
+      }
+    });
+
+    const data = JSON.parse(response.text || '[]');
+    if (!Array.isArray(data)) return [];
+    
+    return data.map(item => ({
+      ...item,
+      bengali: item.bengali?.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim(),
+      source: 'Gemini Explore'
+    }));
+  } catch (error) {
+    console.error("Explore pack error:", error);
+    return [];
   }
 }
 
