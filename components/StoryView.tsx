@@ -19,27 +19,21 @@ interface StoryViewProps {
   onNavigate: (word: string) => void;
   state: StoryState;
   onUpdateState: (newState: Partial<StoryState>) => void;
-  cardCache: Record<string, CardData>; // Added cache prop
+  cardCache: Record<string, CardData>; 
 }
 
 const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpdateState, cardCache }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPromptLoading, setIsPromptLoading] = useState(false);
-
-  // Tooltip State
   const [tooltip, setTooltip] = useState<{ word: string, text: string, pos?: string, x: number, y: number } | null>(null);
-  
-  // Refs
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Initialize prompt if empty
   useEffect(() => {
     if (!state.prompt && !state.hasStarted) {
         handleMix();
     }
   }, []);
 
-  // Handle Mix Button (AI Generated Prompt)
   const handleMix = async () => {
     setIsPromptLoading(true);
     try {
@@ -52,7 +46,6 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
     }
   };
 
-  // Start Story
   const handleProceed = async () => {
     if (!state.prompt.trim()) return;
     onUpdateState({ hasStarted: true });
@@ -68,7 +61,6 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
     }
   };
 
-  // Next Part
   const handleNextPart = async () => {
     if (state.currentIndex < state.segments.length - 1) {
       onUpdateState({ currentIndex: state.currentIndex + 1 });
@@ -101,7 +93,6 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
     const clientX = e.clientX;
     const clientY = e.clientY;
 
-    // Check Cache first
     if (cardCache[word]) {
       const cached = cardCache[word];
       setTooltip({ 
@@ -162,7 +153,9 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
         <div className="story-container setup">
             <div className="story-header">
                 <h3>Story Mode</h3>
-                <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
+                <button onClick={onClose} className="close-button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
             
             <div className="story-setup-content">
@@ -197,7 +190,9 @@ const StoryView: React.FC<StoryViewProps> = ({ onClose, onNavigate, state, onUpd
       <div className="story-container reading">
         <div className="story-header">
             <h3>Chapter {state.currentIndex + 1}</h3>
-            <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
+            <button onClick={onClose} className="close-button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
         </div>
 
         <div className="story-content">

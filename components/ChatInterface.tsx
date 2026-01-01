@@ -1,3 +1,6 @@
+
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -42,23 +45,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, onNavigate, save
     try {
         let response = await chatSession.current?.sendMessage({ message: userMsg });
         
-        // Handle potential function calls (like adding words)
         if (response?.functionCalls) {
             for (const fc of response.functionCalls) {
                 if (fc.name === 'addWordsToList' && fc.args?.words) {
                     const newWords: string[] = fc.args.words;
                     
-                    // Update the parent's savedWords state
                     setSavedWords(prev => {
                         const existing = new Set(prev.map(w => w.toLowerCase()));
                         const filteredNew = newWords.filter(w => !existing.has(w.toLowerCase()));
                         return [...filteredNew, ...prev];
                     });
 
-                    // Send the tool result back to the AI
                     response = await chatSession.current?.sendMessage({
                       message: {
-                        role: 'user', // Must send tool results as user turn
+                        role: 'user', 
                         parts: [{
                           functionResponse: {
                             name: fc.name,
@@ -67,7 +67,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, onNavigate, save
                           }
                         }]
                       }
-                    } as any); // SDK typing for sendMessage vs sendMessage with tool results can be tricky
+                    } as any);
                 }
             }
         }
@@ -86,7 +86,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, onNavigate, save
     <div className="auth-overlay" style={{ padding: 0 }} onClick={onClose}>
         <div className="chat-page" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
             <div className="chat-page-header">
-                <button onClick={onClose} style={{ color: 'white', fontSize: '1.6rem', fontWeight: 300, padding: '0 12px' }}>&lt;</button>
+                <button onClick={onClose} style={{ color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
                 <span style={{ fontWeight: 700 }}>LexiFlow AI</span>
                 {isProcessing && (
                   <div className="processing-indicator" style={{ marginLeft: 'auto', fontSize: '0.7rem', opacity: 0.7 }}>
@@ -118,6 +120,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, onNavigate, save
                             borderRadius: '24px', 
                             border: 'none', 
                             background: '#1c1c1e', 
+                            // Fixed: Wrapped 'white' in quotes to make it a string literal
                             color: 'white',
                             boxSizing: 'border-box',
                             opacity: isProcessing ? 0.6 : 1

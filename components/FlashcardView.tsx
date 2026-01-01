@@ -21,6 +21,7 @@ interface FlashcardViewProps {
   onToggleSave: (word: string) => void;
   onToggleFavorite: (word: string) => void;
   onNavigate: (word: string, initialFlipped?: boolean) => void;
+  onNavigateSilent?: (word: string) => void;
   onCacheUpdate: (word: string, data: CardData) => void;
   onOpenImport: () => void;
   isOnline: boolean;
@@ -35,7 +36,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 }) => {
   const [isFlipped, setIsFlipped] = useState(initialFlipped);
   const [data, setData] = useState<CardData>({
-    pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: ''
+    pos: '...', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -67,7 +68,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     }
 
     setIsLoading(true);
-    setData({ pos: '...', ipa: '', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: '' });
+    setData({ pos: '...', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: '' });
     
     try {
       const result = await fetchWordData(word);
@@ -162,7 +163,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     if (isExploreMode) return `DISCOVERING ${exploreProgress?.current}/${exploreProgress?.total}`;
     if (!srsItem || srsItem.reviewCount === 0) return 'NEW WORD';
     if (srsItem.masteryLevel >= 5) return 'MASTERED';
-    // Simplified status labels: merged RE-LEARNING into LEARNING for a cleaner look
     return 'LEARNING';
   };
 
@@ -209,7 +209,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
            <div className="card-back-header">
              <div style={{ display: 'flex', flexDirection: 'column' }}>
                <h2 className="word-small" style={{ fontSize: '1.4rem' }}>{topic}</h2>
-               {(visibilitySettings.ipa && data.ipa) && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{data.ipa}</span>}
+               {data.pos && <div className="header-pos-sub">{data.pos}</div>}
              </div>
              <div style={{ display: 'flex', gap: '8px' }}>
                 <button className={`fav-btn ${isFavorite ? 'faved' : ''}`} onClick={(e) => { e.stopPropagation(); onToggleFavorite(topic); }} style={{ position: 'relative', top: 0, right: 0 }}>
@@ -249,6 +249,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                     <div className="section-label">WORD FAMILY</div>
                     <div className="chip-container">
                         {familyList.map(f => {
+                            // Extract word only for navigation (strips brackets like (v), (n))
                             const clean = f.replace(/\s*\([^)]*\)/g, '').trim();
                             return (
                                 <span 
@@ -304,7 +305,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>
                  Source: {data.source || 'Local Cache'}
                </span>
-               {/* Swapped order to place button on the right side */}
                <button className="action-btn-back" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'dont_know'); }}>
                   Review Again
                </button>
@@ -343,7 +343,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
 
                 {exploreProgress?.current === exploreProgress?.total ? (
                     <button className="nav-icon-btn primary-gen" onClick={() => onNavigate('__GENERATE__')}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/></svg>
+                        <svg className="sparkle-icon-filled" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4M3 5h4M21 17v4M19 19h4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
                 ) : (
                     <button className="nav-icon-btn" onClick={() => onNavigate('__RANDOM__')}>
@@ -364,6 +364,15 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
       )}
 
       <style>{`
+          .header-pos-sub {
+              font-size: 0.75rem;
+              font-style: italic;
+              color: var(--accent-primary);
+              margin-top: 2px;
+              opacity: 0.85;
+              font-weight: 600;
+              letter-spacing: 0.2px;
+          }
           .card-back-footer {
               display: flex;
               justify-content: space-between;
@@ -399,6 +408,12 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
           }
           .nav-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
           .nav-icon-btn:active:not(:disabled) { transform: scale(0.9); background: var(--accent-secondary); }
+          
+          .sparkle-icon-filled {
+              color: #FFD700;
+              filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.5));
+          }
+          
           .nav-icon-btn.primary-gen { 
             background: var(--accent-primary); 
             color: white; 

@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -36,7 +37,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, setHistory, savedWor
       setUndoItem({ item, index: idx });
       setHistory(prev => prev.filter(h => h.word !== word));
       
-      // Auto-clear undo after 5 seconds
       setTimeout(() => setUndoItem(null), 5000);
     }
   };
@@ -56,7 +56,9 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, setHistory, savedWor
     <div className="auth-overlay" style={{ padding: 0 }} onClick={onClose}>
         <div className="chat-page" style={{ background: 'var(--bg-color)', position: 'relative' }} onClick={e => e.stopPropagation()}>
             <div className="chat-page-header" style={{ background: 'var(--card-bg)', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)' }}>
-                <button onClick={onClose} style={{ color: 'var(--text-primary)', fontSize: '1.6rem', fontWeight: 300, padding: '0 12px' }}>&lt;</button>
+                <button onClick={onClose} style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
                 <span style={{ fontWeight: 800, flex: 1 }}>History</span>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button 

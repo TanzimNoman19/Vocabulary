@@ -24,7 +24,8 @@ const textModelName = 'gemini-3-flash-preview';
 
 export interface CardData {
   pos: string;
-  ipa: string;
+  // Added optional ipa property for phonetic transcription support
+  ipa?: string;
   definition: string;
   bengali: string;
   family: string;
@@ -32,7 +33,11 @@ export interface CardData {
   synonyms: string;
   antonyms: string;
   difficulty: string;
+  // Added optional properties for consistency with dictionaryService
+  etymology?: string;
+  usage_notes?: string;
   source?: string;
+  word?: string;
 }
 
 // Fixed missing interface: Added AsciiArtData for ASCII generation feature
@@ -82,7 +87,6 @@ async function fetchFromWiktionary(word: string): Promise<CardData | null> {
 
         return {
             pos: firstEntry.partOfSpeech || 'word',
-            ipa: 'N/A', // IPA is harder to get from the REST API v1
             definition: cleanHtml(definitionItem.definition),
             bengali: '[Switch to AI Mode for translation]',
             family: firstEntry.partOfSpeech,
@@ -98,7 +102,7 @@ async function fetchFromWiktionary(word: string): Promise<CardData | null> {
 }
 
 /**
- * Fallback to the Free Dictionary API for metadata like IPA and Synonyms
+ * Fallback to the Free Dictionary API for metadata like Synonyms
  */
 async function fetchFromDictionaryApi(word: string): Promise<CardData | null> {
     try {
@@ -111,7 +115,6 @@ async function fetchFromDictionaryApi(word: string): Promise<CardData | null> {
 
         return {
             pos: meaning.partOfSpeech,
-            ipa: entry.phonetic || (entry.phonetics && entry.phonetics.find((p: any) => p.text)?.text) || 'N/A',
             definition: definition.definition,
             bengali: '[Switch to AI Mode for translation]',
             family: meaning.partOfSpeech,
@@ -133,13 +136,12 @@ async function fetchFromPublicSources(word: string): Promise<string> {
     // 1. Try Wiktionary (Better definitions)
     const wiktiData = await fetchFromWiktionary(word);
     
-    // 2. Try Dictionary API (Better IPA/Synonyms)
+    // 2. Try Dictionary API (Better Synonyms)
     const dictData = await fetchFromDictionaryApi(word);
 
-    // Merge them: Priority to Wiktionary for Def, DictAPI for IPA/Syns
+    // Merge them: Priority to Wiktionary for Def
     const final: CardData = {
         pos: wiktiData?.pos || dictData?.pos || 'word',
-        ipa: dictData?.ipa || 'N/A',
         definition: wiktiData?.definition || dictData?.definition || 'Definition unavailable.',
         bengali: '[Switch to AI Mode for translation]',
         family: wiktiData?.pos || dictData?.pos || 'N/A',
@@ -151,7 +153,6 @@ async function fetchFromPublicSources(word: string): Promise<string> {
     };
 
     return `POS: ${final.pos}
-IPA: ${final.ipa}
 DEFINITION: ${final.definition}
 BENGALI: ${final.bengali}
 WORD FAMILY: ${final.family}
@@ -173,7 +174,7 @@ export async function* streamDefinition(
   try {
     const cached = await getCachedDefinition(topic);
     if (cached) {
-      const formatted = `POS: ${cached.pos}\nIPA: ${cached.ipa}\nDEFINITION: ${cached.definition}\nBENGALI: ${cached.bengali}\nWORD FAMILY: ${cached.family}\nCONTEXT: ${cached.context}\nSYNONYMS: ${cached.synonyms}\nANTONYMS: ${cached.antonyms}\nDIFFICULTY: ${cached.difficulty}`;
+      const formatted = `POS: ${cached.pos}\nDEFINITION: ${cached.definition}\nBENGALI: ${cached.bengali}\nWORD FAMILY: ${cached.family}\nCONTEXT: ${cached.context}\nSYNONYMS: ${cached.synonyms}\nANTONYMS: ${cached.antonyms}\nDIFFICULTY: ${cached.difficulty}`;
       yield formatted;
       return;
     }
@@ -201,7 +202,6 @@ export async function* streamDefinition(
   const prompt = `Define "${topic}" for a vocabulary flashcard.
   Format the response EXACTLY as follows using these headers:
   POS: [part of speech]
-  IPA: [IPA pronunciation]
   DEFINITION: [Comprehensive and precise English definition, max 25 words]
   BENGALI: [Accurate Bengali meaning (Bangla Artho)]
   WORD FAMILY: [Related forms]
@@ -255,7 +255,6 @@ export function parseFlashcardResponse(text: string): CardData {
   };
   return {
     pos: extract('POS'), 
-    ipa: extract('IPA'), 
     definition: extract('DEFINITION'),
     bengali: extract('BENGALI'), 
     family: extract('WORD FAMILY'), 

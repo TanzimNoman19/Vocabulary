@@ -151,9 +151,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
       <div className="auth-overlay" onClick={onClose}>
         <div className="auth-container manage-account-container" onClick={(e) => e.stopPropagation()}>
           <div className="auth-header">
-            <h3>{confirmingAction ? 'Dangerous Action' : 'Account Settings'}</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{confirmingAction ? 'Dangerous Action' : 'Account Settings'}</h3>
             {!confirmingAction && (
-              <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
+              <button onClick={onClose} className="close-x-btn" style={{ background: 'var(--accent-secondary)', padding: '8px', borderRadius: '12px', display: 'flex' }}>
+                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
             )}
           </div>
           
@@ -194,7 +196,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
                   disabled={loading || cooldownRemaining > 0 || confirmationInput !== (confirmingAction === 'wipe' ? 'WIPE' : 'RESET')}
                   onClick={performDestructiveAction}
                 >
-                  {cooldownRemaining > 0 ? `Wait (${cooldownRemaining}s)` : 'Confirm Delete'}
+                  {cooldownRemaining > 0 ? `Wait (${cooldownRemaining}s)` : 'Confirm'}
                 </button>
               </div>
             </div>
@@ -227,14 +229,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
                           </div>
                           <span className="item-arrow">›</span>
                       </button>
-                      <button className="settings-item" onClick={() => alert("Check your email to reset password.")}>
-                          <span className="item-icon">🔒</span>
-                          <div className="item-text">
-                              <span className="item-title">Security</span>
-                              <span className="item-desc">Change password</span>
-                          </div>
-                          <span className="item-arrow">›</span>
-                      </button>
                   </div>
 
                   <div className="settings-section destructive-zone">
@@ -243,7 +237,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
                           <span className="item-icon">🔄</span>
                           <div className="item-text">
                               <span className="item-title">Reset Progress</span>
-                              <span className="item-desc">Clear SRS learning history</span>
+                              <span className="item-desc">Restart SRS learning history</span>
                           </div>
                       </button>
                       <button className="settings-item danger" onClick={() => startDestructiveAction('wipe')}>
@@ -268,158 +262,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
               LexiFlow v2.5 • Secured Session
           </div>
         </div>
-        <style>{`
-          .manage-account-container {
-              max-width: 400px;
-              width: 95%;
-              padding: 1.5rem;
-          }
-          .manage-profile-header {
-              display: flex;
-              align-items: center;
-              gap: 1rem;
-              padding: 1rem;
-              background: var(--accent-secondary);
-              border-radius: 16px;
-              margin-bottom: 1.5rem;
-          }
-          .profile-badge {
-              width: 50px;
-              height: 50px;
-              background: var(--accent-primary);
-              color: white;
-              border-radius: 50%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 1.4rem;
-              font-weight: 800;
-              flex-shrink: 0;
-          }
-          .profile-name { margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
-          .profile-email { margin: 0; font-size: 0.8rem; color: var(--text-secondary); }
-
-          .settings-list {
-              display: flex;
-              flex-direction: column;
-              gap: 1.5rem;
-          }
-          .settings-section {
-              display: flex;
-              flex-direction: column;
-              gap: 8px;
-          }
-          .destructive-zone {
-              border: 1px dashed rgba(255, 59, 48, 0.4);
-              padding: 12px;
-              border-radius: 16px;
-              background: rgba(255, 59, 48, 0.02);
-          }
-          .settings-item {
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              padding: 12px;
-              border-radius: 12px;
-              background: var(--card-bg);
-              border: 1px solid var(--border-color);
-              text-align: left;
-              transition: transform 0.1s;
-          }
-          .settings-item:active { transform: scale(0.98); }
-          .settings-item.danger { border-color: rgba(255, 59, 48, 0.2); }
-          .settings-item.danger .item-title { color: var(--danger-color); }
-          
-          .item-icon { font-size: 1.2rem; }
-          .item-text { flex: 1; display: flex; flex-direction: column; }
-          .item-title { font-size: 0.9rem; font-weight: 700; color: var(--text-primary); }
-          .item-desc { font-size: 0.7rem; color: var(--text-secondary); }
-          .item-arrow { color: var(--text-muted); font-size: 1.2rem; }
-
-          .destructive-confirmation-view {
-              display: flex;
-              flex-direction: column;
-              gap: 1.5rem;
-          }
-          .warning-banner {
-              background: rgba(255, 59, 48, 0.1);
-              color: var(--danger-color);
-              padding: 1rem;
-              border-radius: 16px;
-              display: flex;
-              gap: 12px;
-              font-size: 0.85rem;
-              line-height: 1.5;
-              font-weight: 500;
-          }
-          .warning-icon { font-size: 1.5rem; }
-          .challenge-prompt { font-size: 0.9rem; font-weight: 600; text-align: center; color: var(--text-secondary); }
-          .challenge-word { color: var(--danger-color); font-weight: 900; letter-spacing: 1px; }
-          .challenge-input {
-              width: 100%;
-              padding: 14px;
-              border-radius: 12px;
-              border: 2px solid var(--border-color);
-              text-align: center;
-              font-size: 1.2rem;
-              font-weight: 800;
-              background: var(--bg-color);
-              color: var(--text-primary);
-          }
-          .challenge-input:focus { border-color: var(--danger-color); outline: none; }
-          
-          .confirmation-actions {
-              display: flex;
-              gap: 12px;
-          }
-          .cancel-btn { flex: 1; background: var(--bg-color); color: var(--text-primary); border: 1px solid var(--border-color); }
-          .confirm-destructive-btn { 
-              flex: 1.5; 
-              background: var(--danger-color); 
-              color: white; 
-          }
-          .confirm-destructive-btn:disabled { 
-              background: var(--text-muted); 
-              opacity: 0.6; 
-              cursor: not-allowed; 
-          }
-
-          .logout-btn {
-              background: var(--accent-secondary);
-              color: var(--accent-primary);
-              margin-top: 0.5rem;
-              border: none;
-              padding: 14px;
-              border-radius: 12px;
-              font-weight: 700;
-          }
-          
-          .account-footer-info {
-              text-align: center;
-              font-size: 0.65rem;
-              color: var(--text-muted);
-              margin-top: 1.5rem;
-              letter-spacing: 0.5px;
-              text-transform: uppercase;
-          }
-          
-          .auth-link-btn {
-            color: var(--accent-primary);
-            font-weight: 800;
-            text-decoration: underline;
-            background: rgba(88, 86, 214, 0.08);
-            padding: 4px 8px;
-            border-radius: 8px;
-            border: none;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .auth-link-btn:hover {
-            background: rgba(88, 86, 214, 0.15);
-            transform: translateY(-1px);
-          }
-        `}</style>
       </div>
     );
   }
@@ -428,8 +270,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
     <div className="auth-overlay" onClick={onClose}>
       <div className="auth-container" onClick={(e) => e.stopPropagation()}>
         <div className="auth-header">
-          <h3>{isLogin ? 'Sign In' : 'Create Account'}</h3>
-          <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{isLogin ? 'Sign In' : 'Create Account'}</h3>
+          <button onClick={onClose} className="close-x-btn" style={{ background: 'var(--accent-secondary)', padding: '8px', borderRadius: '12px', display: 'flex' }}>
+             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </div>
         
         {message && (
@@ -444,21 +288,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
                 border: `1px solid ${message.type === 'error' ? 'var(--danger-color)' : 'var(--success-color)'}`
             }}>
               {message.text}
-              {showTroubleshoot && (
-                  <button 
-                    onClick={runDiagnostics}
-                    style={{ 
-                        marginTop: '10px', 
-                        display: 'block', 
-                        textDecoration: 'underline', 
-                        fontWeight: 'bold', 
-                        color: 'inherit',
-                        fontSize: '0.75rem' 
-                    }}
-                  >
-                    Run Connection Diagnostics
-                  </button>
-              )}
             </div>
         )}
 
@@ -510,12 +339,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
               {loading ? 'Connecting...' : (isLogin ? 'Sign In' : 'Sign Up')}
             </button>
 
-            <div className="auth-footer" style={{ marginTop: '2rem', textAlign: 'center' }}>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <div className="auth-footer" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 {isLogin ? "New to LexiFlow? " : "Already registered? "}
                 <button 
                     type="button"
-                    className="auth-link-btn"
+                    style={{ color: 'var(--accent-primary)', fontWeight: 800, background: 'none', padding: '4px' }}
                     onClick={() => { setIsLogin(!isLogin); setMessage(null); setShowTroubleshoot(false); }}
                 >
                     {isLogin ? 'Create Account' : 'Sign In'}
@@ -525,24 +354,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
           </form>
         )}
       </div>
-      <style>{`
-        .auth-link-btn {
-          color: var(--accent-primary);
-          font-weight: 800;
-          text-decoration: none;
-          background: rgba(88, 86, 214, 0.08);
-          padding: 6px 12px;
-          border-radius: 8px;
-          border: none;
-          font-size: 0.85rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        .auth-link-btn:hover {
-          background: rgba(88, 86, 214, 0.15);
-          transform: translateY(-1px);
-        }
-      `}</style>
     </div>
   );
 };

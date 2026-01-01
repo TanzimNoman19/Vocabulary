@@ -28,7 +28,9 @@ const DiscoverySettings: React.FC<DiscoverySettingsProps> = ({ mix, onMixChange,
         <div className="discovery-overlay" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', width: '100%', maxWidth: '380px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>Explore Preferences</h3>
-                <button onClick={onClose} style={{ fontSize: '1.6rem', fontWeight: 300 }}>&lt;</button>
+                <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
 
             <div style={{ marginBottom: '2.5rem' }}>

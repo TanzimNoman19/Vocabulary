@@ -537,11 +537,12 @@ button {
 
 .auth-container {
   background: var(--card-bg);
-  width: 100%; max-width: 350px;
+  width: 100%; max-width: 400px;
   border-radius: 24px;
   padding: 2rem;
   box-shadow: var(--shadow-float);
   border: 1px solid var(--border-color);
+  position: relative;
 }
 
 .auth-header {
@@ -569,6 +570,25 @@ button {
   transition: all 0.2s;
 }
 .auth-btn.primary { background: var(--text-primary); color: var(--bg-color); }
+
+/* --- CLOSE BUTTON CROSS --- */
+.close-x-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  background: var(--accent-secondary);
+  border: none;
+  border-radius: 12px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.close-x-btn:hover {
+  background: var(--border-color);
+}
 
 /* --- REFINED BOTTOM NAV --- */
 

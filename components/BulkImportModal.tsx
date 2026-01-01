@@ -3,8 +3,8 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { useState, useEffect } from 'react';
-import { CardData, generateBulkWordData } from '../services/dictionaryService';
+import React, { useState, useEffect, useRef } from 'react';
+import { CardData, generateBulkWordData, searchVocabulary } from '../services/dictionaryService';
 
 interface BulkImportModalProps {
   onClose: () => void;
@@ -19,6 +19,11 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
   const [error, setError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<'Copy Sample JSON' | 'Copied!'>('Copy Sample JSON');
   const [summary, setSummary] = useState<{ total: number, unique: number } | null>(null);
+
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (activeTab === 'json' && jsonInput.trim()) {
@@ -38,6 +43,39 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
         setSummary(null);
     }
   }, [jsonInput, activeTab]);
+
+  // Handle AI Suggestions
+  useEffect(() => {
+    if (activeTab !== 'ai' || !aiInput.trim()) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      // Find the segment the user is currently typing
+      const words = aiInput.split(/[,|\n]/);
+      const currentSegment = words[words.length - 1].trim();
+
+      if (currentSegment.length >= 2) {
+        setIsSearching(true);
+        try {
+          const results = await searchVocabulary(currentSegment);
+          // Filter out words already in the list
+          const existingWords = new Set(words.map(w => w.trim().toLowerCase()));
+          const filtered = results.filter(r => !existingWords.has(r.toLowerCase()));
+          setSuggestions(filtered);
+        } catch (e) {
+          console.error("Suggestion fetch failed", e);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setSuggestions([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [aiInput, activeTab]);
 
   const handleJsonImport = () => {
     try {
@@ -91,6 +129,19 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
         console.error(e);
     } finally {
         setIsGenerating(false);
+    }
+  };
+
+  const handleSelectSuggestion = (word: string) => {
+    const words = aiInput.split(/[,|\n]/);
+    words[words.length - 1] = word;
+    const newValue = words.join(', ') + ', ';
+    setAiInput(newValue);
+    setSuggestions([]);
+    
+    // Focus back and scroll to end
+    if (textareaRef.current) {
+      textareaRef.current.focus();
     }
   };
 
@@ -151,8 +202,10 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
     <div className="auth-overlay" onClick={onClose}>
       <div className="auth-container bulk-import-container" onClick={(e) => e.stopPropagation()}>
         <div className="auth-header">
-          <h3>Import Words</h3>
-          <button onClick={onClose} className="close-button" style={{ fontSize: '1.6rem', fontWeight: 300, padding: '0 8px' }}>&lt;</button>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Import Words</h3>
+          <button onClick={onClose} className="close-button-cross" aria-label="Close import">
+             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </div>
 
         <div className="import-tabs">
@@ -195,13 +248,32 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
                 <div className="ai-mode">
                     <p className="tab-hint">Enter words separated by commas or new lines. Gemini will generate full flashcards for all of them.</p>
                     
-                    <textarea 
-                        className="import-textarea ai-list"
-                        placeholder="Enter words here... (e.g. ephemeral, petrichor, mellifluous)"
-                        value={aiInput}
-                        onChange={(e) => setAiInput(e.target.value)}
-                        disabled={isGenerating}
-                    />
+                    <div className="ai-input-wrapper">
+                        <textarea 
+                            ref={textareaRef}
+                            className="import-textarea ai-list"
+                            placeholder="Enter words here... (e.g. ephemeral, petrichor, mellifluous)"
+                            value={aiInput}
+                            onChange={(e) => setAiInput(e.target.value)}
+                            disabled={isGenerating}
+                        />
+                        
+                        {suggestions.length > 0 && (
+                          <div className="import-suggestions">
+                            {suggestions.map((word, i) => (
+                              <button key={i} className="import-suggestion-chip" onClick={() => handleSelectSuggestion(word)}>
+                                {word}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {isSearching && (
+                          <div className="import-search-status">
+                            Searching words...
+                          </div>
+                        )}
+                    </div>
 
                     <div className="import-footer-actions">
                         <button 
@@ -277,6 +349,13 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
             display: inline-block;
         }
 
+        .ai-input-wrapper {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
         .import-textarea {
             width: 100%;
             height: 180px;
@@ -293,6 +372,39 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
         }
         .import-textarea:focus { border-color: var(--accent-primary); }
         .import-textarea.ai-list { font-family: var(--font-family); font-size: 1rem; font-weight: 600; }
+
+        .import-suggestions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: -4px;
+          max-height: 80px;
+          overflow-y: auto;
+          padding: 4px 2px;
+          scrollbar-width: none;
+        }
+        .import-suggestions::-webkit-scrollbar { display: none; }
+
+        .import-suggestion-chip {
+          background: var(--accent-secondary);
+          color: var(--accent-primary);
+          padding: 6px 12px;
+          border-radius: 10px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          border: 1px solid var(--border-color);
+          transition: all 0.2s;
+        }
+        .import-suggestion-chip:active { transform: scale(0.92); }
+
+        .import-search-status {
+          font-size: 0.7rem;
+          color: var(--accent-primary);
+          font-style: italic;
+          font-weight: 600;
+          margin-bottom: 4px;
+          text-align: right;
+        }
 
         .import-footer-actions {
             display: flex;

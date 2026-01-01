@@ -5,7 +5,7 @@
 */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchWordData, CardData, fetchExplorePack } from './services/dictionaryService';
+import { fetchWordData, CardData, fetchExplorePack, capitalize } from './services/dictionaryService';
 import { SRSItem, calculateSRS, initializeSRSItem, getDueWords } from './services/srsService';
 import { supabase, saveUserData, getUserData } from './services/supabaseClient';
 import FlashcardView from './components/FlashcardView';
@@ -18,7 +18,6 @@ import TrashModal from './components/TrashModal';
 type Tab = 'home' | 'saved' | 'profile';
 
 export interface VisibilitySettings {
-  ipa: boolean;
   definition: boolean;
   bengali: boolean;
   context: boolean;
@@ -30,7 +29,6 @@ export interface VisibilitySettings {
 }
 
 const DEFAULT_VISIBILITY: VisibilitySettings = {
-  ipa: true,
   definition: true,
   bengali: true,
   context: true,
@@ -54,10 +52,59 @@ const App: React.FC = () => {
   const [srsData, setSrsData] = useState<Record<string, SRSItem>>(() => JSON.parse(localStorage.getItem('srsData') || '{}'));
   const [cardCache, setCardCache] = useState<Record<string, CardData>>(() => JSON.parse(localStorage.getItem('cardCache') || '{}'));
 
+  // Migration Effect: Ensure all existing words are capitalized
+  useEffect(() => {
+    let hasChanged = false;
+
+    const sanitizeList = (list: string[]) => {
+      const newList = list.map(capitalize);
+      if (JSON.stringify(newList) !== JSON.stringify(list)) {
+        hasChanged = true;
+        return newList;
+      }
+      return list;
+    };
+
+    const sanitizeObjectKeys = <T,>(obj: Record<string, T>) => {
+      const next: Record<string, T> = {};
+      let changed = false;
+      Object.entries(obj).forEach(([key, value]) => {
+        const capitalizedKey = capitalize(key);
+        if (capitalizedKey !== key) changed = true;
+        next[capitalizedKey] = value;
+      });
+      if (changed) {
+        hasChanged = true;
+        return next;
+      }
+      return obj;
+    };
+
+    const newSaved = sanitizeList(savedWords);
+    const newFavs = sanitizeList(favoriteWords);
+    const newTrash = sanitizeList(trashedWords);
+    const newSRS = sanitizeObjectKeys(srsData);
+    const newCache = sanitizeObjectKeys(cardCache);
+
+    if (hasChanged) {
+      setSavedWords(newSaved);
+      setFavoriteWords(newFavs);
+      setTrashedWords(newTrash);
+      setSrsData(newSRS as Record<string, SRSItem>);
+      setCardCache(newCache as Record<string, CardData>);
+      if (currentTopic && currentTopic !== "__EMPTY_FALLBACK__") {
+        setCurrentTopic(capitalize(currentTopic));
+      }
+    }
+  }, []); // Only run once on mount
+
+  // Settings
   const [visibilitySettings, setVisibilitySettings] = useState<VisibilitySettings>(() => {
     const saved = localStorage.getItem('visibilitySettings');
     return saved ? JSON.parse(saved) : DEFAULT_VISIBILITY;
   });
+  const [explorePackSize, setExplorePackSize] = useState<number>(() => Number(localStorage.getItem('explorePackSize')) || 10);
+  const [definitionStyle, setDefinitionStyle] = useState<string>(() => localStorage.getItem('definitionStyle') || 'standard');
 
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -81,13 +128,14 @@ const App: React.FC = () => {
     setIsSyncing(true);
     while (syncQueue.current.length > 0 && isOnline) {
       const word = syncQueue.current.shift();
-      if (word && !cardCache[word]) {
+      const capitalizedWord = word ? capitalize(word) : null;
+      if (capitalizedWord && !cardCache[capitalizedWord]) {
         try {
-          const data = await fetchWordData(word);
-          handleCacheUpdate(word, data);
+          const data = await fetchWordData(capitalizedWord, definitionStyle);
+          handleCacheUpdate(capitalizedWord, data);
           await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (e) {
-          console.warn(`Background sync failed for ${word}`);
+          console.warn(`Background sync failed for ${capitalizedWord}`);
         }
       }
     }
@@ -107,11 +155,18 @@ const App: React.FC = () => {
     if (!navigator.onLine) return;
     const cloudData = await getUserData(userId);
     if (cloudData) {
-        setSavedWords(cloudData.savedWords || []);
-        setFavoriteWords(cloudData.favoriteWords || []);
-        setTrashedWords(cloudData.trashedWords || []);
-        setSrsData(cloudData.srsData || {});
-        setCardCache(prev => ({ ...prev, ...(cloudData.cardCache || {}) }));
+        setSavedWords((cloudData.savedWords || []).map(capitalize));
+        setFavoriteWords((cloudData.favoriteWords || []).map(capitalize));
+        setTrashedWords((cloudData.trashedWords || []).map(capitalize));
+        
+        // Sanitize SRS and Cache keys from cloud
+        const srs: Record<string, SRSItem> = {};
+        Object.entries(cloudData.srsData || {}).forEach(([k, v]) => { srs[capitalize(k)] = v as SRSItem; });
+        setSrsData(srs);
+
+        const cache: Record<string, CardData> = {};
+        Object.entries(cloudData.cardCache || {}).forEach(([k, v]) => { cache[capitalize(k)] = v as CardData; });
+        setCardCache(prev => ({ ...prev, ...cache }));
     }
   }, []);
 
@@ -142,8 +197,11 @@ const App: React.FC = () => {
     localStorage.setItem('srsData', JSON.stringify(srsData));
     localStorage.setItem('cardCache', JSON.stringify(cardCache));
     localStorage.setItem('visibilitySettings', JSON.stringify(visibilitySettings));
+    localStorage.setItem('explorePackSize', String(explorePackSize));
+    localStorage.setItem('definitionStyle', definitionStyle);
+
     if (user && isOnline) saveUserData(user.id, { savedWords, favoriteWords, trashedWords, srsData, cardCache });
-  }, [savedWords, favoriteWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings]);
+  }, [savedWords, favoriteWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings, explorePackSize, definitionStyle]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -165,7 +223,7 @@ const App: React.FC = () => {
           if (nextIdx < explorePack.length) {
               setExploreIndex(nextIdx);
               setShouldStartFlipped(false);
-              setCurrentTopic(explorePack[nextIdx]);
+              setCurrentTopic(capitalize(explorePack[nextIdx]));
           }
           return;
       }
@@ -174,7 +232,7 @@ const App: React.FC = () => {
           const dueCached = getDueWords(savedWords, srsData);
           const nextWord = dueCached[0] || savedWords[Math.floor(Math.random() * savedWords.length)];
           setShouldStartFlipped(false);
-          setCurrentTopic(nextWord);
+          setCurrentTopic(capitalize(nextWord));
       } else {
           setCurrentTopic("__EMPTY_FALLBACK__");
       }
@@ -188,37 +246,39 @@ const App: React.FC = () => {
             const prevIdx = exploreIndex - 1;
             setExploreIndex(prevIdx);
             setShouldStartFlipped(true);
-            setCurrentTopic(explorePack[prevIdx]);
+            setCurrentTopic(capitalize(explorePack[prevIdx]));
           }
       } else if (word === '__GENERATE__') {
           handleToggleExplore(true); // Forced regeneration for next pack
       } else {
           setShouldStartFlipped(initialFlipped);
-          setCurrentTopic(word);
+          setCurrentTopic(capitalize(word));
       }
       setActiveTab('home');
   };
 
   const handleToggleSave = (word: string) => {
-      const exists = savedWords.some(w => w.toLowerCase() === word.toLowerCase());
+      const capitalizedWord = capitalize(word);
+      const exists = savedWords.some(w => w.toLowerCase() === capitalizedWord.toLowerCase());
       if (exists) {
-          handleMoveToTrash([word]);
+          handleMoveToTrash([capitalizedWord]);
       } else {
-          if (trashedWords.includes(word)) {
-              handleRestoreFromTrash([word]);
+          if (trashedWords.includes(capitalizedWord)) {
+              handleRestoreFromTrash([capitalizedWord]);
           } else {
-              setSavedWords(prev => [word, ...prev]);
-              if (!srsData[word]) setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
+              setSavedWords(prev => [capitalizedWord, ...prev]);
+              if (!srsData[capitalizedWord]) setSrsData(prev => ({ ...prev, [capitalizedWord]: initializeSRSItem(capitalizedWord) }));
           }
       }
   };
 
   const handleCacheUpdate = (word: string, data: CardData) => {
     if (!data.definition || data.definition.includes("pending download")) return;
-    setCardCache(prev => ({ ...prev, [word]: data }));
-    if (word !== "__EMPTY_FALLBACK__" && !savedWords.includes(word)) {
-      setSavedWords(prev => [word, ...prev]);
-      if (!srsData[word]) setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
+    const capitalizedWord = capitalize(word);
+    setCardCache(prev => ({ ...prev, [capitalizedWord]: { ...data, word: capitalizedWord } }));
+    if (capitalizedWord !== "__EMPTY_FALLBACK__" && !savedWords.includes(capitalizedWord)) {
+      setSavedWords(prev => [capitalizedWord, ...prev]);
+      if (!srsData[capitalizedWord]) setSrsData(prev => ({ ...prev, [capitalizedWord]: initializeSRSItem(capitalizedWord) }));
     }
   };
 
@@ -235,11 +295,16 @@ const App: React.FC = () => {
       }
       setIsExploring(true);
       try {
-        const pack = await fetchExplorePack('intermediate');
+        const pack = await fetchExplorePack('intermediate', explorePackSize);
         if (pack.length > 0) {
-          const packWords = pack.map(p => p.word!).filter(Boolean);
+          const packWords = pack.map(p => capitalize(p.word!)).filter(Boolean);
           const newCache = { ...cardCache };
-          pack.forEach(p => { if(p.word) newCache[p.word] = p; });
+          pack.forEach(p => { 
+            if(p.word) {
+              const capWord = capitalize(p.word);
+              newCache[capWord] = { ...p, word: capWord }; 
+            }
+          });
           setCardCache(newCache);
           
           setExplorePack(packWords);
@@ -259,19 +324,26 @@ const App: React.FC = () => {
 
   const handleImportWords = (importedCache: Record<string, CardData>) => {
       const importedWordList = Object.keys(importedCache);
+      const sanitizedCache: Record<string, CardData> = {};
+      const newWords: string[] = [];
+      
       const existingWordSet = new Set(savedWords.map(w => w.toLowerCase()));
       const trashedWordSet = new Set(trashedWords.map(w => w.toLowerCase()));
-      const newWords: string[] = [];
+
       importedWordList.forEach(word => {
+          const capWord = capitalize(word);
           const lowerWord = word.toLowerCase();
+          sanitizedCache[capWord] = { ...importedCache[word], word: capWord };
+
           if (!existingWordSet.has(lowerWord)) {
-              newWords.push(word);
+              newWords.push(capWord);
               if (trashedWordSet.has(lowerWord)) {
                   setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
               }
           }
       });
-      setCardCache(prev => ({ ...prev, ...importedCache }));
+      
+      setCardCache(prev => ({ ...prev, ...sanitizedCache }));
       if (newWords.length > 0) {
           setSavedWords(prev => [...newWords, ...prev]);
           setSrsData(prev => {
@@ -283,84 +355,93 @@ const App: React.FC = () => {
   };
 
   const handleUpdateWordData = (oldWord: string, newWord: string, newData: CardData) => {
-    if (oldWord === newWord) {
-      setCardCache(prev => ({ ...prev, [newWord]: newData }));
+    const capOld = capitalize(oldWord);
+    const capNew = capitalize(newWord);
+    const sanitizedData = { ...newData, word: capNew };
+
+    if (capOld === capNew) {
+      setCardCache(prev => ({ ...prev, [capNew]: sanitizedData }));
       return;
     }
     setCardCache(prev => {
-      const next = { ...prev, [newWord]: newData };
-      delete next[oldWord];
+      const next = { ...prev, [capNew]: sanitizedData };
+      delete next[capOld];
       return next;
     });
     setSrsData(prev => {
       const next = { ...prev };
-      if (next[oldWord]) {
-        next[newWord] = { ...next[oldWord], word: newWord };
-        delete next[oldWord];
+      if (next[capOld]) {
+        next[capNew] = { ...next[capOld], word: capNew };
+        delete next[capOld];
       }
       return next;
     });
-    setSavedWords(prev => prev.map(w => w === oldWord ? newWord : w));
-    setFavoriteWords(prev => prev.map(w => w === oldWord ? newWord : w));
-    if (currentTopic === oldWord) setCurrentTopic(newWord);
+    setSavedWords(prev => prev.map(w => capitalize(w) === capOld ? capNew : capitalize(w)));
+    setFavoriteWords(prev => prev.map(w => capitalize(w) === capOld ? capNew : capitalize(w)));
+    if (capitalize(currentTopic) === capOld) setCurrentTopic(capNew);
   };
 
   const handleMoveToTrash = (words: string[]) => {
-      const wordSet = new Set(words.map(w => w.toLowerCase()));
+      const capWords = words.map(capitalize);
+      const wordSet = new Set(capWords.map(w => w.toLowerCase()));
       setSavedWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
       setFavoriteWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
-      setTrashedWords(prev => [...new Set([...words, ...prev])]);
+      setTrashedWords(prev => [...new Set([...capWords, ...prev])]);
       if (wordSet.has(currentTopic.toLowerCase())) handleRandom();
   };
 
   const handleRestoreFromTrash = (words: string[]) => {
-      const wordSet = new Set(words.map(w => w.toLowerCase()));
+      const capWords = words.map(capitalize);
+      const wordSet = new Set(capWords.map(w => w.toLowerCase()));
       setTrashedWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
-      setSavedWords(prev => [...new Set([...words, ...prev])]);
+      setSavedWords(prev => [...new Set([...capWords, ...prev])]);
   };
 
   const handlePermanentDelete = (words: string[]) => {
-      const wordSet = new Set(words.map(w => w.toLowerCase()));
+      const capWords = words.map(capitalize);
+      const wordSet = new Set(capWords.map(w => w.toLowerCase()));
       setTrashedWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
       setSrsData(prev => {
           const next = { ...prev };
-          words.forEach(w => delete next[w]);
+          capWords.forEach(w => delete next[w]);
           return next;
       });
   };
 
   const handleToggleFavorite = (word: string) => {
-      const lowerWord = word.toLowerCase();
+      const capWord = capitalize(word);
+      const lowerWord = capWord.toLowerCase();
       const isFav = favoriteWords.some(w => w.toLowerCase() === lowerWord);
       if (isFav) {
           setFavoriteWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
       } else {
-          setFavoriteWords(prev => [word, ...prev]);
-          if (!savedWords.includes(word)) setSavedWords(prev => [word, ...prev]);
-          if (!srsData[word]) setSrsData(prev => ({ ...prev, [word]: initializeSRSItem(word) }));
-          if (trashedWords.includes(word)) {
+          setFavoriteWords(prev => [capWord, ...prev]);
+          if (!savedWords.includes(capWord)) setSavedWords(prev => [capWord, ...prev]);
+          if (!srsData[capWord]) setSrsData(prev => ({ ...prev, [capWord]: initializeSRSItem(capWord) }));
+          if (trashedWords.includes(capWord)) {
               setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
           }
       }
   };
 
   const handleSRSUpdate = (word: string, grade: 'know' | 'dont_know') => {
-      const currentItem = srsData[word] || initializeSRSItem(word);
+      const capWord = capitalize(word);
+      const currentItem = srsData[capWord] || initializeSRSItem(capWord);
       const newItem = calculateSRS(currentItem, grade);
-      setSrsData(prev => ({ ...prev, [word]: newItem }));
-      if (!savedWords.includes(word)) setSavedWords(prev => [word, ...prev]);
+      setSrsData(prev => ({ ...prev, [capWord]: newItem }));
+      if (!savedWords.includes(capWord)) setSavedWords(prev => [capWord, ...prev]);
       handleRandom();
   };
 
   const handleResetSRS = () => {
     setSrsData(prev => {
       const next: Record<string, SRSItem> = {};
-      Object.keys(prev).forEach(word => { next[word] = initializeSRSItem(word); });
+      Object.keys(prev).forEach(word => { next[capitalize(word)] = initializeSRSItem(capitalize(word)); });
       return next;
     });
   };
 
-  const cachedCount = savedWords.filter(w => cardCache[w]).length;
+  const cachedCount = savedWords.filter(w => cardCache[capitalize(w)]).length;
 
   return (
     <div className="app-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -377,7 +458,7 @@ const App: React.FC = () => {
                 className={`header-explore-btn ${isExploreMode ? 'active' : ''}`} 
                 onClick={() => handleToggleExplore()}
                >
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M21 17v4"/><path d="M19 19h4"/></svg>
+                 <svg className="sparkle-icon-colorful" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4M3 5h4M21 17v4M19 19h4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                  <span>Explore</span>
                </button>
             )}
@@ -393,7 +474,7 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <button className="icon-btn header-settings-btn" onClick={() => setIsSettingsOpen(true)} title="Card Settings">
+            <button className="icon-btn header-settings-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>
                 </svg>
@@ -409,7 +490,17 @@ const App: React.FC = () => {
       </header>
 
       {isBulkImportOpen && <BulkImportModal onClose={() => setIsBulkImportOpen(false)} onImport={handleImportWords} />}
-      {isSettingsOpen && <CardSettingsModal settings={visibilitySettings} onUpdate={setVisibilitySettings} onClose={() => setIsSettingsOpen(false)} />}
+      {isSettingsOpen && (
+        <CardSettingsModal 
+            visibility={visibilitySettings} 
+            onUpdateVisibility={setVisibilitySettings}
+            explorePackSize={explorePackSize}
+            onUpdatePackSize={setExplorePackSize}
+            definitionStyle={definitionStyle}
+            onUpdateDefinitionStyle={setDefinitionStyle}
+            onClose={() => setIsSettingsOpen(false)} 
+        />
+      )}
       {isTrashOpen && (
           <TrashModal 
             trashedWords={trashedWords} 
@@ -429,7 +520,7 @@ const App: React.FC = () => {
         
         {activeTab === 'home' && (
             <FlashcardView 
-              topic={currentTopic} 
+              topic={capitalize(currentTopic)} 
               initialFlipped={shouldStartFlipped} 
               savedWords={savedWords} 
               favoriteWords={favoriteWords} 
@@ -517,6 +608,13 @@ const App: React.FC = () => {
             color: white;
             border-color: var(--accent-primary);
             box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2);
+        }
+        .sparkle-icon-colorful {
+            color: #FFD700; /* Gold default */
+            filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.3));
+        }
+        .header-explore-btn.active .sparkle-icon-colorful {
+            color: #FFF; /* White when button is active background */
         }
         .icon-btn:hover, .header-explore-btn:hover {
           background: var(--border-color);
