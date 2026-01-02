@@ -12,7 +12,7 @@ interface BulkImportModalProps {
 }
 
 const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) => {
-  const [activeTab, setActiveTab] = useState<'json' | 'ai'>('json');
+  const [activeTab, setActiveTab] = useState<'ai' | 'json'>('ai');
   const [jsonInput, setJsonInput] = useState('');
   const [aiInput, setAiInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -209,44 +209,18 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
         </div>
 
         <div className="import-tabs">
-            <button className={activeTab === 'json' ? 'active' : ''} onClick={() => setActiveTab('json')}>
-                Manual JSON
-            </button>
             <button className={activeTab === 'ai' ? 'active' : ''} onClick={() => setActiveTab('ai')}>
                 ✨ AI Word List
+            </button>
+            <button className={activeTab === 'json' ? 'active' : ''} onClick={() => setActiveTab('json')}>
+                Manual JSON
             </button>
         </div>
         
         <div className="tab-content">
-            {activeTab === 'json' ? (
-                <div className="json-mode">
-                    <p className="tab-hint">Paste an array of objects. Perfect for migrating between devices or manually curating lists.</p>
-                    
-                    {summary && (
-                        <div className="import-summary-pill">
-                            <span>Detected {summary.total} entries ({summary.unique} unique)</span>
-                        </div>
-                    )}
-
-                    <textarea 
-                        className="import-textarea"
-                        placeholder="[{ 'word': 'apple', ... }]"
-                        value={jsonInput}
-                        onChange={(e) => setJsonInput(e.target.value)}
-                    />
-
-                    <div className="import-footer-actions">
-                        <button className="auth-btn sample-copy-btn" onClick={handleCopy}>
-                            {copyStatus === 'Copied!' ? '✅ Copied!' : '📋 Copy Sample'}
-                        </button>
-                        <button className="auth-btn primary" onClick={handleJsonImport} disabled={!jsonInput.trim()}>
-                            Import Words
-                        </button>
-                    </div>
-                </div>
-            ) : (
+            {activeTab === 'ai' ? (
                 <div className="ai-mode">
-                    <p className="tab-hint">Enter words separated by commas or new lines. Gemini will generate full flashcards for all of them.</p>
+                    <p className="tab-hint">Enter words separated by commas or new lines. Gemini will generate full flashcards including definitions, word families, and usage tips.</p>
                     
                     <div className="ai-input-wrapper">
                         <textarea 
@@ -289,6 +263,32 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
                             ) : (
                                 '✨ Generate & Import'
                             )}
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="json-mode">
+                    <p className="tab-hint">Paste an array of objects. Perfect for migrating between devices or manually curating lists.</p>
+                    
+                    {summary && (
+                        <div className="import-summary-pill">
+                            <span>Detected {summary.total} entries ({summary.unique} unique)</span>
+                        </div>
+                    )}
+
+                    <textarea 
+                        className="import-textarea"
+                        placeholder="[{ 'word': 'apple', ... }]"
+                        value={jsonInput}
+                        onChange={(e) => setJsonInput(e.target.value)}
+                    />
+
+                    <div className="import-footer-actions">
+                        <button className="auth-btn sample-copy-btn" onClick={handleCopy}>
+                            {copyStatus === 'Copied!' ? '✅ Copied!' : '📋 Copy Sample'}
+                        </button>
+                        <button className="auth-btn primary" onClick={handleJsonImport} disabled={!jsonInput.trim()}>
+                            Import Words
                         </button>
                     </div>
                 </div>

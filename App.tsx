@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -27,6 +28,14 @@ export interface VisibilitySettings {
   usageNotes: boolean;
 }
 
+export interface SemanticCluster {
+    id: string;
+    title: string;
+    members: string[];
+    explanation: string;
+    isAiGenerated: boolean;
+}
+
 const DEFAULT_VISIBILITY: VisibilitySettings = {
   definition: true,
   bengali: true,
@@ -50,11 +59,14 @@ const App: React.FC = () => {
   const [trashedWords, setTrashedWords] = useState<string[]>(() => JSON.parse(localStorage.getItem('trashedWords') || '[]'));
   const [srsData, setSrsData] = useState<Record<string, SRSItem>>(() => JSON.parse(localStorage.getItem('srsData') || '{}'));
   const [cardCache, setCardCache] = useState<Record<string, CardData>>(() => JSON.parse(localStorage.getItem('cardCache') || '{}'));
+  
+  // Clusters and Settings
+  const [semanticClusters, setSemanticClusters] = useState<SemanticCluster[]>(() => JSON.parse(localStorage.getItem('semanticClusters') || '[]'));
+  const [clusterSimilarity, setClusterSimilarity] = useState<number>(() => Number(localStorage.getItem('clusterSimilarity')) || 1);
 
-  // Migration Effect: Ensure all existing words are capitalized
+  // Migration Effect
   useEffect(() => {
     let hasChanged = false;
-
     const sanitizeList = (list: string[]) => {
       const newList = list.map(capitalize);
       if (JSON.stringify(newList) !== JSON.stringify(list)) {
@@ -63,7 +75,6 @@ const App: React.FC = () => {
       }
       return list;
     };
-
     const sanitizeObjectKeys = <T,>(obj: Record<string, T>) => {
       const next: Record<string, T> = {};
       let changed = false;
@@ -95,9 +106,8 @@ const App: React.FC = () => {
         setCurrentTopic(capitalize(currentTopic));
       }
     }
-  }, []); // Only run once on mount
+  }, []);
 
-  // Settings
   const [visibilitySettings, setVisibilitySettings] = useState<VisibilitySettings>(() => {
     const saved = localStorage.getItem('visibilitySettings');
     return saved ? JSON.parse(saved) : DEFAULT_VISIBILITY;
@@ -111,13 +121,11 @@ const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [shouldStartFlipped, setShouldStartFlipped] = useState(false);
 
-  // Explore Mode State
   const [isExploreMode, setIsExploreMode] = useState(false);
   const [explorePack, setExplorePack] = useState<string[]>([]);
   const [exploreIndex, setExploreIndex] = useState(-1);
   const [isExploring, setIsExploring] = useState(false);
 
-  // Background Sync Queue
   const syncQueue = useRef<string[]>([]);
   const isSyncProcessing = useRef(false);
 
@@ -157,8 +165,9 @@ const App: React.FC = () => {
         setSavedWords((cloudData.savedWords || []).map(capitalize));
         setFavoriteWords((cloudData.favoriteWords || []).map(capitalize));
         setTrashedWords((cloudData.trashedWords || []).map(capitalize));
+        setSemanticClusters(cloudData.semanticClusters || []);
+        if (cloudData.clusterSimilarity !== undefined) setClusterSimilarity(cloudData.clusterSimilarity);
         
-        // Sanitize SRS and Cache keys from cloud
         const srs: Record<string, SRSItem> = {};
         Object.entries(cloudData.srsData || {}).forEach(([k, v]) => { srs[capitalize(k)] = v as SRSItem; });
         setSrsData(srs);
@@ -198,9 +207,11 @@ const App: React.FC = () => {
     localStorage.setItem('visibilitySettings', JSON.stringify(visibilitySettings));
     localStorage.setItem('explorePackSize', String(explorePackSize));
     localStorage.setItem('definitionStyle', definitionStyle);
+    localStorage.setItem('semanticClusters', JSON.stringify(semanticClusters));
+    localStorage.setItem('clusterSimilarity', String(clusterSimilarity));
 
-    if (user && isOnline) saveUserData(user.id, { savedWords, favoriteWords, trashedWords, srsData, cardCache });
-  }, [savedWords, favoriteWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings, explorePackSize, definitionStyle]);
+    if (user && isOnline) saveUserData(user.id, { savedWords, favoriteWords, trashedWords, srsData, cardCache, semanticClusters, clusterSimilarity });
+  }, [savedWords, favoriteWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings, explorePackSize, definitionStyle, semanticClusters, clusterSimilarity]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -224,12 +235,10 @@ const App: React.FC = () => {
               setShouldStartFlipped(false);
               setCurrentTopic(capitalize(explorePack[nextIdx]));
           } else {
-              // End of current cumulative pack, trigger automatic generation of next pack
               handleToggleExplore(true);
           }
           return;
       }
-
       if (savedWords.length > 0) {
           const dueCached = getDueWords(savedWords, srsData);
           const nextWord = dueCached[0] || savedWords[Math.floor(Math.random() * savedWords.length)];
@@ -251,7 +260,7 @@ const App: React.FC = () => {
             setCurrentTopic(capitalize(explorePack[prevIdx]));
           }
       } else if (word === '__GENERATE__') {
-          handleToggleExplore(true); // Explicit regeneration
+          handleToggleExplore(true);
       } else {
           setShouldStartFlipped(initialFlipped);
           setCurrentTopic(capitalize(word));
@@ -297,22 +306,17 @@ const App: React.FC = () => {
       }
       setIsExploring(true);
       try {
-        // Exclude both saved words and already explored words in this session
         const wordsToExclude = [...savedWords, ...explorePack];
         const pack = await fetchExplorePack('intermediate', explorePackSize, wordsToExclude);
-        
         if (pack.length > 0) {
-          // Robust filter to ensure strictly no duplicates
           const newPackWords = pack
             .map(p => capitalize(p.word!))
             .filter(w => w && !savedWords.includes(w) && !explorePack.includes(w));
-          
           if (newPackWords.length === 0) {
-              alert("Gemini couldn't find unique words that aren't already in your library. Try changing the level or count.");
+              alert("Gemini couldn't find unique words that aren't already in your library.");
               setIsExploring(false);
               return;
           }
-
           const newCache = { ...cardCache };
           pack.forEach(p => { 
             if(p.word) {
@@ -321,21 +325,17 @@ const App: React.FC = () => {
             }
           });
           setCardCache(newCache);
-          
           if (forceNext && isExploreMode) {
-              // APPEND mode: Add to existing session list
               const nextIdx = explorePack.length;
               setExplorePack(prev => [...prev, ...newPackWords]);
               setExploreIndex(nextIdx);
               setCurrentTopic(newPackWords[0]);
           } else {
-              // INITIAL mode: Start new session
               setExplorePack(newPackWords);
               setExploreIndex(0);
               setIsExploreMode(true);
               setCurrentTopic(newPackWords[0]);
           }
-          
           setShouldStartFlipped(false);
           handleCacheUpdate(newPackWords[0], pack.find(p => capitalize(p.word!) === newPackWords[0]) || pack[0]);
         }
@@ -351,15 +351,12 @@ const App: React.FC = () => {
       const importedWordList = Object.keys(importedCache);
       const sanitizedCache: Record<string, CardData> = {};
       const newWords: string[] = [];
-      
       const existingWordSet = new Set(savedWords.map(w => w.toLowerCase()));
       const trashedWordSet = new Set(trashedWords.map(w => w.toLowerCase()));
-
       importedWordList.forEach(word => {
           const capWord = capitalize(word);
           const lowerWord = word.toLowerCase();
           sanitizedCache[capWord] = { ...importedCache[word], word: capWord };
-
           if (!existingWordSet.has(lowerWord)) {
               newWords.push(capWord);
               if (trashedWordSet.has(lowerWord)) {
@@ -367,7 +364,6 @@ const App: React.FC = () => {
               }
           }
       });
-      
       setCardCache(prev => ({ ...prev, ...sanitizedCache }));
       if (newWords.length > 0) {
           setSavedWords(prev => [...newWords, ...prev]);
@@ -383,7 +379,6 @@ const App: React.FC = () => {
     const capOld = capitalize(oldWord);
     const capNew = capitalize(newWord);
     const sanitizedData = { ...newData, word: capNew };
-
     if (capOld === capNew) {
       setCardCache(prev => ({ ...prev, [capNew]: sanitizedData }));
       return;
@@ -576,6 +571,11 @@ const App: React.FC = () => {
                 onPermanentDelete={handlePermanentDelete} 
                 onOpenImport={() => setIsBulkImportOpen(true)}
                 onUpdateWordData={handleUpdateWordData}
+                semanticClusters={semanticClusters}
+                setSemanticClusters={setSemanticClusters}
+                clusterSimilarity={clusterSimilarity}
+                setClusterSimilarity={setClusterSimilarity}
+                isOnline={isOnline}
             />
         )}
         {activeTab === 'profile' && <ProfileView user={user} savedCount={savedWords.length} cachedCount={cachedCount} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} isOnline={isOnline} onResetSRS={handleResetSRS} />}
@@ -635,11 +635,11 @@ const App: React.FC = () => {
             box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2);
         }
         .sparkle-icon-colorful {
-            color: #FFD700; /* Gold default */
+            color: #FFD700;
             filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.3));
         }
         .header-explore-btn.active .sparkle-icon-colorful {
-            color: #FFF; /* White when button is active background */
+            color: #FFF;
         }
         .icon-btn:hover, .header-explore-btn:hover {
           background: var(--border-color);

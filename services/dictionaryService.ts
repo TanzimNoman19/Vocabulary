@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -5,10 +6,10 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { DICTIONARY_WORDS, VOCAB_LEVELS } from './dictionaryData';
+import { SemanticCluster } from '../App';
 
 export interface CardData {
   pos: string;
-  // Added optional ipa property to support phonetic transcription during bulk import
   ipa?: string;
   definition: string;
   bengali: string;
@@ -34,28 +35,21 @@ const getAIClient = () => {
   return aiInstance;
 };
 
-/**
- * Utility to ensure the first letter is always capital
- */
 export const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
 export async function searchVocabulary(query: string): Promise<string[]> {
   const cleanQuery = query.trim();
   if (cleanQuery.length < 2) return [];
-
   if (!navigator.onLine) {
     return DICTIONARY_WORDS.filter(w => w.toLowerCase().startsWith(cleanQuery.toLowerCase())).slice(0, 8).map(capitalize);
   }
-  
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
-
     const response = await fetch(`https://api.datamuse.com/sug?s=${encodeURIComponent(cleanQuery)}&max=8`, {
         signal: controller.signal
     });
     clearTimeout(timeoutId);
-
     if (!response.ok) throw new Error('Network response was not ok');
     const data = await response.json();
     return data.map((item: any) => capitalize(item.word));
@@ -67,7 +61,6 @@ export async function searchVocabulary(query: string): Promise<string[]> {
 export async function fetchWordData(word: string, definitionStyle: string = 'standard', retries = 1): Promise<CardData> {
   const normalizedWord = capitalize(word);
   const isLocalWord = DICTIONARY_WORDS.some(w => w.toLowerCase() === word.toLowerCase());
-  
   const localFallback: CardData = {
     pos: isLocalWord ? 'common word' : 'word',
     definition: `Full AI-enhanced details for "${normalizedWord}" are pending download.`,
@@ -80,156 +73,148 @@ export async function fetchWordData(word: string, definitionStyle: string = 'sta
     source: 'Local Cache',
     word: normalizedWord
   };
-
   if (!navigator.onLine) return localFallback;
-
+  const ai = getAIClient();
   const styleInstruction = definitionStyle === 'concise' 
     ? 'Keep the definition very brief (under 12 words).' 
     : (definitionStyle === 'detailed' ? 'Provide a rich, nuanced definition (approx 30-40 words).' : 'Provide a standard, clear definition.');
-
-  const ai = getAIClient();
   const prompt = `Define the English word "${normalizedWord}" for a vocabulary flashcard.
   ${styleInstruction}
   Return a JSON object with the following keys:
   "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
-  
   RULES:
-  1. "family": IMPORTANT: Include related forms WITH their part of speech in brackets. Example: "Creation (n), Creative (adj), Creatively (adv)".
-  2. "bengali": Provide an elaborative, descriptive Bengali definition. NO phonetic English in parentheses.
-  3. "usage_notes": BE CREATIVE AND STRUCTURED. Use these labels: [TRAP], [MNEMONIC], [VIBE], [TIP].
-  4. Format: Raw JSON only.`;
-
+  1. "family": Include related forms WITH their part of speech in brackets.
+  2. "bengali": Provide an elaborative definition.
+  3. "usage_notes": Use [TRAP], [MNEMONIC], [VIBE], [TIP].
+  Format: Raw JSON only.`;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { 
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 0 }
-      }
+      config: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }
     });
-
     const data = JSON.parse(response.text || '{}');
-    
-    if (data.bengali) {
-      data.bengali = data.bengali.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim();
-    }
-
-    return {
-      ...data,
-      word: normalizedWord,
-      source: 'Gemini AI'
-    };
+    if (data.bengali) data.bengali = data.bengali.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim();
+    return { ...data, word: normalizedWord, source: 'Gemini AI' };
   } catch (error: any) {
-    const errorMsg = error.message || '';
-    if (retries > 0 && (errorMsg.includes('fetch') || errorMsg.includes('Network'))) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return fetchWordData(normalizedWord, definitionStyle, retries - 1);
-    }
+    if (retries > 0) return fetchWordData(normalizedWord, definitionStyle, retries - 1);
     return localFallback;
   }
 }
 
+export async function generateSemanticClusters(words: string[], level: number = 2): Promise<SemanticCluster[]> {
+    if (!navigator.onLine) return [];
+    const ai = getAIClient();
+    
+    let levelInstruction = "";
+    if (level === 0) {
+        levelInstruction = "Level: STRICT. Only group words that are direct synonyms or share the exact same definition. If a word has no perfect synonym in the list, leave it alone.";
+    } else if (level === 1) {
+        levelInstruction = "Level: RELATED. Group words that are close in meaning, share a common root idea, or belong to the same specific semantic field (e.g., 'fleeting' and 'temporary').";
+    } else {
+        levelInstruction = "Level: THEMATIC. Group words by broad conceptual themes, contexts, or abstract domains (e.g., 'Scientific Discovery', 'States of Mind', 'Beauty and Art').";
+    }
+
+    const prompt = `Organize these English words into meaningful groups based on the requested similarity level: ${words.join(', ')}.
+    ${levelInstruction}
+    
+    Return a JSON array of objects with:
+    "title": A creative name for the group.
+    "members": Array of words from the input belonging to this group.
+    "explanation": A 1-sentence summary. For STRICT/RELATED levels, explain the 'Common Meaning'. For THEMATIC level, explain the 'Theme'.
+    
+    RULES:
+    1. Every input word must belong to exactly one group.
+    2. Format: Raw JSON array only.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }
+        });
+        const data = JSON.parse(response.text || '[]');
+        return data.map((item: any, idx: number) => ({
+            ...item,
+            id: `cluster-lvl${level}-${idx}-${Date.now()}`,
+            isAiGenerated: true,
+            level: level // Track which level this was generated for
+        }));
+    } catch (e) {
+        console.error("Clustering failed", e);
+        return [];
+    }
+}
+
 export async function fetchExplorePack(level: VocabLevel = 'intermediate', count: number = 10, excludeWords: string[] = []): Promise<CardData[]> {
   if (!navigator.onLine) throw new Error("Offline: Cannot explore new words.");
-
   const ai = getAIClient();
-  const excludeInstruction = excludeWords.length > 0 
-    ? `CRITICAL: Do not include any of these words in the output: ${excludeWords.slice(-200).join(', ')}.`
-    : '';
-
+  const excludeInstruction = excludeWords.length > 0 ? `CRITICAL: Do not include any of these words in the output: ${excludeWords.slice(-200).join(', ')}.` : '';
   const prompt = `Generate a pack of ${count} unique, interesting English vocabulary words suitable for a ${level} level learner.
   ${excludeInstruction}
-  Return a JSON array of objects. Each object must contain:
-  "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
-  
-  RULES:
-  1. Avoid extremely common words. Focus on descriptive, academic, or literary terms.
-  2. "family": Include related forms WITH their part of speech in brackets. Example: "Creation (n), Creative (adj)".
-  3. "bengali": Precise meaning.
-  4. "usage_notes": Use [TRAP], [MNEMONIC], [VIBE] labels.
-  Format: Raw JSON array only.`;
-
+  Return a JSON array of objects. Format: Raw JSON array only.`;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { 
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 0 }
-      }
+      config: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }
     });
-
     const data = JSON.parse(response.text || '[]');
-    if (!Array.isArray(data)) return [];
-    
-    return data.map(item => ({
-      ...item,
-      word: capitalize(item.word),
-      bengali: item.bengali?.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim(),
-      source: 'Gemini Explore'
-    }));
+    return data.map(item => ({ ...item, word: capitalize(item.word), bengali: item.bengali?.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim(), source: 'Gemini Explore' }));
   } catch (error) {
-    console.error("Explore pack error:", error);
     return [];
   }
 }
 
 export async function generateBulkWordData(words: string[]): Promise<Record<string, CardData>> {
   if (!navigator.onLine) throw new Error("Offline: Cannot use AI bulk generation.");
-  if (words.length === 0) return {};
-
   const ai = getAIClient();
-  const capitalizedInput = words.map(capitalize);
-  const prompt = `Generate comprehensive vocabulary flashcard data for: ${capitalizedInput.join(', ')}.
-  Return a JSON array of objects. Each object must have a "word" key plus:
-  "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
   
-  RULES:
-  1. "family": Include related forms WITH their part of speech in brackets. Example: "Ephemeral (adj), Ephemerality (n)".
-  2. USAGE_NOTES RULE: Be creative and highly practical. Always use structured labels like [TRAP], [MNEMONIC], [VIBE], and [TIP] within the string to separate different types of advice.
-  Example usage_note: "[TRAP]: Often confused with X. [MNEMONIC]: Remember Y."
-  No markdown, just raw JSON array only.`;
+  const prompt = `Generate comprehensive vocabulary flashcard data for the following words: ${words.join(', ')}.
+  
+  For EACH word, return an object with EXACTLY these keys:
+  "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
+  
+  CRITICAL REQUIREMENTS:
+  1. "word": The input word capitalized.
+  2. "family": List related forms (e.g. "happily (adv), happiness (n)").
+  3. "usage_notes": Provide 1-2 creative tips using [TRAP], [MNEMONIC], [VIBE], or [TIP] tags.
+  4. "etymology": Brief origin story.
+  5. "bengali": Accurate Bengali meaning without phonetic brackets.
+  
+  Return as a raw JSON array of objects only. No markdown.`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { 
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 0 }
-      }
+      config: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }
     });
-
     const results = JSON.parse(response.text || '[]');
     const finalCache: Record<string, CardData> = {};
-
     if (Array.isArray(results)) {
       results.forEach((item: any) => {
         if (!item.word) return;
         const normalizedW = capitalize(item.word);
-        const { word: w, ...data } = item;
-        if (data.bengali) {
-            data.bengali = data.bengali.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim();
-        }
-        finalCache[normalizedW] = { ...data, word: normalizedW, source: 'Gemini Bulk AI' } as CardData;
+        finalCache[normalizedW] = { 
+            ...item, 
+            word: normalizedW, 
+            bengali: item.bengali?.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim(),
+            source: 'Gemini Bulk AI' 
+        } as CardData;
       });
     }
-
     return finalCache;
   } catch (error: any) {
-    console.error("Bulk AI Gen Error:", error);
+    console.error("Bulk generation failed", error);
     throw error;
   }
 }
 
 export async function fetchContextSentence(word: string): Promise<string> {
   const normalizedWord = capitalize(word);
-  if (!navigator.onLine) return `The word "${normalizedWord}" is useful in many contexts.`;
-
   const ai = getAIClient();
   const prompt = `Generate one concise, illustrative example sentence for the word "${normalizedWord}". No intro, just the sentence.`;
-
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
