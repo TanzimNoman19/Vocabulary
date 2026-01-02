@@ -249,7 +249,14 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         setSelectionMode(true);
         toggleSelection(word);
         if ('vibrate' in navigator) navigator.vibrate(50);
-    }, 600);
+    }, 1000); // Trigger after 1s to prevent scroll accidents
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+    }
   };
 
   return (
@@ -257,18 +264,20 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
       {selectionMode && (
           <div className="selection-bar">
               <button className="icon-btn-selection" onClick={() => { setSelectionMode(false); setSelectedWords(new Set()); }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
-              <div style={{ flex: 1, fontWeight: 800 }}>{selectedWords.size} Selected</div>
-              <button className="text-action" onClick={() => {
-                  if (selectedWords.size === filteredAndSortedList.length) setSelectedWords(new Set());
-                  else setSelectedWords(new Set(filteredAndSortedList));
-              }}>
-                  {selectedWords.size === filteredAndSortedList.length ? 'NONE' : 'ALL'}
-              </button>
-              <button className="icon-btn-selection danger-fill" onClick={() => { onDeleteMultiple(Array.from(selectedWords)); setSelectionMode(false); }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              </button>
+              <div className="selection-count">{selectedWords.size} Selected</div>
+              <div className="selection-actions-group">
+                <button className="text-action" onClick={() => {
+                    if (selectedWords.size === filteredAndSortedList.length) setSelectedWords(new Set());
+                    else setSelectedWords(new Set(filteredAndSortedList));
+                }}>
+                    {selectedWords.size === filteredAndSortedList.length ? 'NONE' : 'ALL'}
+                </button>
+                <button className="icon-btn-selection trash-circle" onClick={() => { if(confirm(`Delete ${selectedWords.size} words?`)) { onDeleteMultiple(Array.from(selectedWords)); setSelectionMode(false); setSelectedWords(new Set()); } }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
           </div>
       )}
 
@@ -335,7 +344,14 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                   const mastery = getMasteryLabel(word);
                   const masteryLevel = srsData[word]?.masteryLevel || 0;
                   return (
-                    <div key={word} className={`modern-word-card ${selectedWords.has(word) ? 'selected' : ''}`} onClick={() => handleItemClick(word)} onPointerDown={(e) => startLongPress(word, e)}>
+                    <div 
+                        key={word} 
+                        className={`modern-word-card ${selectedWords.has(word) ? 'selected' : ''}`} 
+                        onClick={() => handleItemClick(word)} 
+                        onPointerDown={(e) => startLongPress(word, e)}
+                        onPointerUp={cancelLongPress}
+                        onPointerMove={cancelLongPress}
+                    >
                         <div className="card-info">
                             <div className="card-top-row">
                                 <span className="word-title">{word}</span>
@@ -467,22 +483,91 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
       {editingWord && <EditWordModal word={editingWord} initialData={cardCache[editingWord]} onClose={() => setEditingWord(null)} onSave={onUpdateWordData} />}
 
       <style>{`
-        .list-tabs-container { display: flex; align-items: center; gap: 12px; margin-bottom: 1.2rem; padding: 0 4px; }
+        /* SELECTION BAR STYLES */
+        .selection-bar {
+            position: absolute;
+            top: 0.75rem;
+            left: 0.75rem;
+            right: 0.75rem;
+            z-index: 200;
+            background: var(--accent-primary);
+            color: white;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(88, 86, 214, 0.4);
+            animation: selectionSlideDown 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        @keyframes selectionSlideDown {
+            from { transform: translateY(-30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .selection-count {
+            flex: 1;
+            font-weight: 800;
+            font-size: 0.95rem;
+            letter-spacing: -0.2px;
+        }
+
+        .icon-btn-selection {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .icon-btn-selection:active { transform: scale(0.9); }
+
+        .trash-circle {
+            background: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+        }
+
+        .selection-actions-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .text-action {
+            color: white;
+            font-weight: 900;
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+            padding: 8px 14px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            text-transform: uppercase;
+        }
+
+        .saved-list-view { position: relative; }
+
+        .list-tabs-container { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; padding: 0 4px; }
         .list-tabs { flex: 1; display: flex; gap: 6px; background: var(--accent-secondary); padding: 5px; border-radius: 16px; }
-        .list-tabs button { flex: 1; padding: 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); }
+        .list-tabs button { flex: 1; padding: 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); }
         .list-tabs button.active { background: var(--card-bg); color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.1); }
         
         .view-toggle-group { display: flex; gap: 8px; }
         .view-toggle-btn { width: 40px; height: 40px; border-radius: 12px; background: var(--accent-secondary); color: var(--accent-primary); border: 1.5px solid var(--border-color); display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
         .view-toggle-btn.active { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
 
-        .filter-sort-bar { margin: 0 4px 1.5rem 4px; display: flex; flex-direction: column; gap: 14px; }
-        .sort-toggles { display: flex; gap: 10px; align-items: center; }
-        .sort-toggles button:not(.view-toggle-btn) { font-size: 0.65rem; font-weight: 800; padding: 10px 16px; border-radius: 12px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); letter-spacing: 0.5px; height: 40px; }
-        .sort-toggles button.active:not(.view-toggle-btn) { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
+        .filter-sort-bar { margin: 0 4px 1.25rem 4px; display: flex; flex-direction: column; gap: 12px; }
+        .sort-toggles { display: flex; gap: 8px; align-items: center; }
+        .sort-toggles button:not(.view-toggle-btn):not(.text-action) { font-size: 0.65rem; font-weight: 800; padding: 8px 14px; border-radius: 12px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); letter-spacing: 0.5px; height: 38px; }
+        .sort-toggles button.active:not(.view-toggle-btn):not(.text-action) { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
         
         .filter-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
-        .chip { white-space: nowrap; font-size: 0.65rem; font-weight: 800; padding: 8px 18px; border-radius: 20px; border: 1.5px solid var(--border-color); color: var(--text-muted); background: transparent; }
+        .chip { white-space: nowrap; font-size: 0.65rem; font-weight: 800; padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border-color); color: var(--text-muted); background: transparent; }
         .chip.active { background: var(--text-primary); color: var(--bg-color); border-color: var(--text-primary); }
 
         .synonym-controls-box { margin: 0 4px 1.2rem 4px; padding: 1rem; background: var(--accent-secondary); border-radius: 18px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border-color); }
@@ -495,45 +580,55 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .ai-refine-btn { padding: 10px 16px; font-size: 0.7rem; font-weight: 900; background: var(--card-bg); color: var(--accent-primary); border-radius: 10px; border: 1px solid var(--border-color); transition: all 0.2s; white-space: nowrap; }
         .ai-refine-btn:active { transform: scale(0.95); }
 
-        .words-scroll-list { display: flex; flex-direction: column; gap: 1rem; padding: 0 4px; }
+        .words-scroll-list { display: flex; flex-direction: column; gap: 0.65rem; padding: 0 4px; }
         .modern-word-card { 
             background: var(--card-bg); 
-            border-radius: 24px; 
-            padding: 1.5rem; 
+            border-radius: 20px; 
+            padding: 0.85rem 1.15rem; 
             display: flex; 
             align-items: center; 
-            gap: 1rem; 
+            gap: 0.75rem; 
             border: 1px solid var(--border-color); 
             transition: all 0.2s; 
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.01);
         }
         .modern-word-card.selected { background: var(--accent-secondary); border-color: var(--accent-primary); }
-        .word-title { font-size: 1.35rem; font-weight: 800; color: var(--text-primary); }
-        .card-info { flex: 1; min-width: 0; }
-        .card-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .card-indicators { display: flex; align-items: center; gap: 8px; }
-        .edit-mini-btn { padding: 4px; border-radius: 6px; color: var(--accent-primary); background: var(--accent-secondary); transition: 0.1s; }
+        .word-title { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+        .card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .card-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+        .card-indicators { display: flex; align-items: center; gap: 6px; }
+        .edit-mini-btn { padding: 3px; border-radius: 5px; color: var(--accent-primary); background: var(--accent-secondary); transition: 0.1s; display: flex; }
         .edit-mini-btn:active { transform: scale(0.9); }
-        .word-snippet { font-size: 0.95rem; color: var(--text-secondary); margin: 0 0 1rem 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .word-snippet { 
+            font-size: 0.85rem; 
+            color: var(--text-secondary); 
+            margin: 0 0 6px 0; 
+            line-height: 1.3; 
+            display: -webkit-box; 
+            -webkit-line-clamp: 1; 
+            -webkit-box-orient: vertical; 
+            overflow: hidden; 
+            font-weight: 500;
+        }
 
-        .mastery-progress-dashes { display: flex; gap: 6px; }
-        .mastery-progress-dashes .dash { width: 18px; height: 3px; border-radius: 4px; background: var(--border-color); }
+        .mastery-progress-dashes { display: flex; gap: 4px; }
+        .mastery-progress-dashes .dash { width: 14px; height: 2.5px; border-radius: 4px; background: var(--border-color); }
         .mastery-progress-dashes .dash.filled { background: var(--accent-primary); opacity: 0.3; }
         .mastery-pill.new .dash.filled { background: var(--accent-primary); }
         .mastery-pill.learning .dash.filled { background: #f57f17; }
         .mastery-pill.mastered .dash.filled { background: #2e7d32; opacity: 1; }
 
-        .family-entry { background: var(--card-bg); border-radius: 20px; border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s; width: 100%; display: block; }
+        .family-entry { background: var(--card-bg); border-radius: 16px; border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s; width: 100%; display: block; }
         .family-entry:active { transform: scale(0.98); }
-        .family-header { padding: 1.25rem; display: flex; justify-content: space-between; align-items: center; width: 100%; }
-        .family-title-group { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
-        .family-icon { font-size: 1.4rem; flex-shrink: 0; }
-        .cluster-title-stack { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-        .family-name { font-weight: 800; font-size: 1.1rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
-        .cluster-meta { font-size: 0.65rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
+        .family-header { padding: 1rem; display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .family-title-group { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+        .family-icon { font-size: 1.2rem; flex-shrink: 0; }
+        .cluster-title-stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+        .family-name { font-weight: 800; font-size: 1rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+        .cluster-meta { font-size: 0.6rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
 
-        .mastery-pill { font-size: 0.65rem; padding: 4px 10px; border-radius: 8px; font-weight: 800; text-transform: uppercase; }
+        .mastery-pill { font-size: 0.6rem; padding: 2px 8px; border-radius: 6px; font-weight: 800; text-transform: uppercase; }
         .mastery-pill.new { background: var(--accent-secondary); color: var(--accent-primary); }
         .mastery-pill.learning { background: rgba(255, 193, 7, 0.1); color: #f57f17; }
         .mastery-pill.mastered { background: rgba(0, 200, 83, 0.1); color: #2e7d32; }
@@ -542,14 +637,14 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .thread-label { font-size: 0.6rem; font-weight: 900; color: var(--accent-primary); letter-spacing: 1px; display: block; margin-bottom: 8px; }
         .modal-hint { font-size: 0.95rem; color: var(--text-primary); line-height: 1.6; font-weight: 600; margin: 0; }
 
-        .family-member-card { padding: 1.15rem; background: var(--bg-color); border-radius: 20px; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color); transition: all 0.2s; }
+        .family-member-card { padding: 1rem; background: var(--bg-color); border-radius: 18px; display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border-color); transition: all 0.2s; }
         .family-member-card.saved { background: white; border: 1px solid var(--accent-primary); cursor: pointer; }
         .family-member-card.saved:active { transform: scale(0.98); }
-        .member-word { font-weight: 800; color: var(--text-primary); font-size: 1.15rem; }
-        .saved-badge { font-size: 0.65rem; background: var(--accent-primary); color: white; padding: 3px 8px; border-radius: 6px; font-weight: 900; letter-spacing: 0.5px; }
-        .member-snippet-oneline { font-size: 0.9rem; color: var(--text-secondary); margin: 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+        .member-word { font-weight: 800; color: var(--text-primary); font-size: 1.1rem; }
+        .saved-badge { font-size: 0.6rem; background: var(--accent-primary); color: white; padding: 2px 6px; border-radius: 5px; font-weight: 900; letter-spacing: 0.5px; }
+        .member-snippet-oneline { font-size: 0.85rem; color: var(--text-secondary); margin: 0; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 
-        .arrow-icon { color: var(--text-muted); padding-left: 8px; }
+        .arrow-icon { color: var(--text-muted); opacity: 0.5; padding-left: 4px; }
 
         /* MODAL FIX: Fixed header and scrollable content */
         .family-modal {
@@ -563,7 +658,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
           border-radius: 32px !important;
         }
         .family-modal .auth-header {
-          padding: 1.5rem;
+          padding: 1.25rem 1.5rem;
           border-bottom: 1px solid var(--border-color);
           margin-bottom: 0 !important;
           flex-shrink: 0;
@@ -573,7 +668,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .family-modal-content {
           flex: 1;
           overflow-y: auto;
-          padding: 1.5rem;
+          padding: 1.25rem 1.5rem;
           -webkit-overflow-scrolling: touch;
         }
       `}</style>
