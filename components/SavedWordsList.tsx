@@ -88,33 +88,51 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     return list;
   }, [baseList, sortBy, sortOrder, filter, srsData, savedWords]);
 
+  /**
+   * Logical Set Union Grouping:
+   * Fixed: Added a block to ignore generic placeholder text like "None" or "N/A"
+   * to prevent unrelated words from being merged together.
+   */
   const familyGroups = useMemo(() => {
     if (viewType !== 'family') return [];
 
     const parseMembers = (str: string): FamilyMember[] => {
-      return str.split(',').map(m => {
+      if (!str) return [];
+      const trimmed = str.trim();
+      const lower = trimmed.toLowerCase();
+      // Exclude generic placeholder text from being used as a grouping key
+      if (lower === 'none' || lower === 'n/a' || lower === 'pending' || lower === 'waiting') return [];
+
+      return trimmed.split(',').map(m => {
         const match = m.match(/(.*?)\s*\((.*?)\)/);
         return {
           word: (match ? match[1].trim() : m.trim()).toLowerCase(),
           pos: match ? match[2].trim() : ''
         };
-      }).filter(m => m.word.length > 0);
+      }).filter(m => {
+          const w = m.word;
+          return w.length > 0 && w !== 'none' && w !== 'n/a';
+      });
     };
 
     let clusters: { all: FamilyMember[], saved: Set<string> }[] = [];
 
     filteredAndSortedList.forEach(word => {
       const cache = cardCache[word];
-      const members = parseMembers(cache?.family || word);
+      const members = parseMembers(cache?.family || '');
+      
+      // Ensure the saved word itself is always in its own family set
       if (!members.find(m => m.word === word.toLowerCase())) {
         members.push({ word: word.toLowerCase(), pos: cache?.pos || '' });
       }
+      
       clusters.push({ 
         all: members, 
         saved: new Set([word]) 
       });
     });
 
+    // Merge logic (Connected Components / Disjoint Set Union)
     let changed = true;
     while (changed) {
       changed = false;
@@ -125,6 +143,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
           );
 
           if (hasCommon) {
+            // Merge j into i
             const mergedAll = [...clusters[i].all];
             clusters[j].all.forEach(m => {
               if (!mergedAll.find(existing => existing.word === m.word)) {
