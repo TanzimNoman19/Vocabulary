@@ -428,8 +428,8 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
 
       {selectedFamilyGroup && (
         <div className="auth-overlay" onClick={() => setSelectedFamilyGroup(null)}>
-          <div className="auth-container family-modal" onClick={e => e.stopPropagation()} style={{ borderRadius: '24px' }}>
-            <div className="auth-header" style={{ marginBottom: '1rem' }}>
+          <div className="auth-container family-modal" onClick={e => e.stopPropagation()}>
+            <div className="auth-header">
               <div className="header-info-group">
                 <h3 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>Word Family</h3>
               </div>
@@ -550,6 +550,32 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .member-snippet-oneline { font-size: 0.9rem; color: var(--text-secondary); margin: 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 
         .arrow-icon { color: var(--text-muted); padding-left: 8px; }
+
+        /* MODAL FIX: Fixed header and scrollable content */
+        .family-modal {
+          width: 95%;
+          max-width: 440px;
+          max-height: 85vh;
+          display: flex;
+          flex-direction: column;
+          padding: 0 !important;
+          overflow: hidden;
+          border-radius: 32px !important;
+        }
+        .family-modal .auth-header {
+          padding: 1.5rem;
+          border-bottom: 1px solid var(--border-color);
+          margin-bottom: 0 !important;
+          flex-shrink: 0;
+          background: var(--card-bg);
+          z-index: 10;
+        }
+        .family-modal-content {
+          flex: 1;
+          overflow-y: auto;
+          padding: 1.5rem;
+          -webkit-overflow-scrolling: touch;
+        }
       `}</style>
     </div>
   );
