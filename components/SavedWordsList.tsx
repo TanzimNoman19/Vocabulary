@@ -25,16 +25,16 @@ interface SavedWordsListProps {
 type SortType = 'alpha' | 'time';
 type SortOrder = 'asc' | 'desc';
 type MasteryFilter = 'all' | 'new' | 'learning' | 'mastered';
+type ViewType = 'list' | 'family';
 
 interface FamilyMember {
-    word: string;
-    pos: string;
+  word: string;
+  pos: string;
 }
 
 interface FamilyGroup {
-  id: string; // The root representative from Union-Find
-  displayTitle: string; // "Word1 (pos), Word2 (pos)..."
-  savedMembers: string[]; 
+  id: string;
+  savedMembers: string[];
   allMembers: FamilyMember[];
 }
 
@@ -45,136 +45,24 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
   const [sortBy, setSortBy] = useState<SortType>('time');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filter, setFilter] = useState<MasteryFilter>('all');
-  const [isFamilyView, setIsFamilyView] = useState(false);
+  const [viewType, setViewType] = useState<ViewType>('list');
+  const [selectedFamilyGroup, setSelectedFamilyGroup] = useState<FamilyGroup | null>(null);
   
+  // Selection Mode State
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
   const longPressTimer = useRef<number | null>(null);
 
+  // Edit Mode State
   const [editingWord, setEditingWord] = useState<string | null>(null);
-  const [selectedFamily, setSelectedFamily] = useState<FamilyGroup | null>(null);
 
+  // Undo Snackbar State
   const [lastTrashed, setLastTrashed] = useState<string[] | null>(null);
   const undoTimeout = useRef<number | null>(null);
 
   const baseList = activeTab === 'all' ? savedWords : favoriteWords;
 
-  const parseFamilyMember = (memberStr: string): FamilyMember => {
-      const match = memberStr.match(/^(.*?)\s*\((.*?)\)$/);
-      if (match) return { word: capitalize(match[1].trim()), pos: match[2].trim() };
-      return { word: capitalize(memberStr.trim()), pos: '' };
-  };
-
-  const groupedFamilies = useMemo(() => {
-    if (!isFamilyView) return [];
-
-    // Union-Find / Disjoint Set Union (DSU) to group words effectively
-    const parent: Record<string, string> = {};
-    const find = (i: string): string => {
-        if (!parent[i]) parent[i] = i;
-        if (parent[i] === i) return i;
-        return parent[i] = find(parent[i]);
-    };
-    const union = (i: string, j: string) => {
-        const rootI = find(i);
-        const rootJ = find(j);
-        if (rootI !== rootJ) parent[rootI] = rootJ;
-    };
-
-    // Word metadata aggregation
-    const allKnownMembers = new Map<string, FamilyMember>();
-    const savedByRoot = new Map<string, Set<string>>();
-
-    // Pass 1: Union everything based on family strings
-    baseList.forEach(savedWord => {
-        const cache = cardCache[savedWord];
-        const lowerSaved = savedWord.toLowerCase();
-        
-        // Ensure the word itself is in the system
-        allKnownMembers.set(lowerSaved, { word: savedWord, pos: cache?.pos || '' });
-
-        const familyStr = cache?.family;
-        if (familyStr && familyStr !== 'N/A') {
-            const memberObjs = familyStr.split(',').map(s => parseFamilyMember(s));
-            memberObjs.forEach(m => {
-                const lowerM = m.word.toLowerCase();
-                // Store metadata for display
-                if (!allKnownMembers.has(lowerM) || (m.pos && !allKnownMembers.get(lowerM)!.pos)) {
-                    allKnownMembers.set(lowerM, m);
-                }
-                // Link them
-                union(lowerSaved, lowerM);
-            });
-        }
-    });
-
-    // Pass 2: Collect members into groups
-    const groupsMap = new Map<string, FamilyGroup>();
-
-    baseList.forEach(savedWord => {
-        const root = find(savedWord.toLowerCase());
-        if (!groupsMap.has(root)) {
-            groupsMap.set(root, {
-                id: root,
-                displayTitle: '',
-                savedMembers: [],
-                allMembers: []
-            });
-        }
-        groupsMap.get(root)!.savedMembers.push(savedWord);
-    });
-
-    // Pass 3: Resolve all members for each group (including unsaved ones mentioned in family strings)
-    // We iterate through allKnownMembers and attach them to their root
-    allKnownMembers.forEach((meta, lowerWord) => {
-        const root = find(lowerWord);
-        const group = groupsMap.get(root);
-        if (group) {
-            // Check if this member is already in allMembers to avoid duplicates
-            if (!group.allMembers.some(m => m.word.toLowerCase() === lowerWord)) {
-                group.allMembers.push(meta);
-            }
-        }
-    });
-
-    const result = Array.from(groupsMap.values());
-
-    // Step 4: Finalize Display Title and Sorting
-    result.forEach(group => {
-        const savedSet = new Set(group.savedMembers);
-        
-        // Sort all members: Saved ones first, then alphabetical
-        group.allMembers.sort((a, b) => {
-            const aIsSaved = savedSet.has(a.word);
-            const bIsSaved = savedSet.has(b.word);
-            if (aIsSaved && !bIsSaved) return -1;
-            if (!aIsSaved && bIsSaved) return 1;
-            return a.word.localeCompare(b.word);
-        });
-
-        group.displayTitle = group.allMembers
-            .map(m => `${m.word}${m.pos ? ` (${m.pos})` : ''}`)
-            .join(', ');
-    });
-
-    // Step 5: Sort the list of family entries
-    result.sort((a, b) => {
-        if (sortBy === 'alpha') {
-            return sortOrder === 'asc' 
-                ? a.displayTitle.localeCompare(b.displayTitle) 
-                : b.displayTitle.localeCompare(a.displayTitle);
-        } else {
-            const timeA = Math.max(...a.savedMembers.map(w => savedWords.indexOf(w)));
-            const timeB = Math.max(...b.savedMembers.map(w => savedWords.indexOf(w)));
-            return sortOrder === 'asc' ? timeB - timeA : timeA - timeB;
-        }
-    });
-
-    return result;
-  }, [baseList, isFamilyView, cardCache, sortBy, sortOrder, savedWords]);
-
   const filteredAndSortedList = useMemo(() => {
-    if (isFamilyView) return [];
     let list = [...baseList];
     if (filter !== 'all') {
         list = list.filter(word => {
@@ -198,19 +86,95 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         }
     });
     return list;
-  }, [baseList, sortBy, sortOrder, filter, srsData, savedWords, isFamilyView]);
+  }, [baseList, sortBy, sortOrder, filter, srsData, savedWords]);
+
+  const familyGroups = useMemo(() => {
+    if (viewType !== 'family') return [];
+
+    const parseMembers = (str: string): FamilyMember[] => {
+      return str.split(',').map(m => {
+        const match = m.match(/(.*?)\s*\((.*?)\)/);
+        return {
+          word: (match ? match[1].trim() : m.trim()).toLowerCase(),
+          pos: match ? match[2].trim() : ''
+        };
+      }).filter(m => m.word.length > 0);
+    };
+
+    let clusters: { all: FamilyMember[], saved: Set<string> }[] = [];
+
+    filteredAndSortedList.forEach(word => {
+      const cache = cardCache[word];
+      const members = parseMembers(cache?.family || word);
+      if (!members.find(m => m.word === word.toLowerCase())) {
+        members.push({ word: word.toLowerCase(), pos: cache?.pos || '' });
+      }
+      clusters.push({ 
+        all: members, 
+        saved: new Set([word]) 
+      });
+    });
+
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < clusters.length; i++) {
+        for (let j = i + 1; j < clusters.length; j++) {
+          const hasCommon = clusters[i].all.some(m1 => 
+            clusters[j].all.some(m2 => m1.word === m2.word)
+          );
+
+          if (hasCommon) {
+            const mergedAll = [...clusters[i].all];
+            clusters[j].all.forEach(m => {
+              if (!mergedAll.find(existing => existing.word === m.word)) {
+                mergedAll.push(m);
+              }
+            });
+            const mergedSaved = new Set([...clusters[i].saved, ...clusters[j].saved]);
+            
+            clusters[i] = { all: mergedAll, saved: mergedSaved };
+            clusters.splice(j, 1);
+            changed = true;
+            break;
+          }
+        }
+        if (changed) break;
+      }
+    }
+
+    return clusters.map((c, idx) => {
+      const sortedSaved = Array.from(c.saved).sort((a, b) => a.localeCompare(b));
+      const sortedAll = c.all.sort((a, b) => {
+        const aSaved = c.saved.has(capitalize(a.word));
+        const bSaved = c.saved.has(capitalize(b.word));
+        if (aSaved && !bSaved) return -1;
+        if (!aSaved && bSaved) return 1;
+        return a.word.localeCompare(b.word);
+      });
+
+      return {
+        id: `family-${idx}`,
+        savedMembers: sortedSaved,
+        allMembers: sortedAll
+      } as FamilyGroup;
+    }).sort((a, b) => a.savedMembers[0].localeCompare(b.savedMembers[0]));
+
+  }, [filteredAndSortedList, cardCache, viewType, savedWords]);
 
   const toggleSelection = (word: string) => {
-    if (isFamilyView) return;
     const next = new Set(selectedWords);
-    if (next.has(word)) next.delete(word);
-    else next.add(word);
+    if (next.has(word)) {
+        next.delete(word);
+    } else {
+        next.add(word);
+    }
     setSelectedWords(next);
     if (next.size === 0) setSelectionMode(false);
   };
 
   const startLongPress = (word: string, e: React.PointerEvent) => {
-    if (selectionMode || isFamilyView) return;
+    if (selectionMode || viewType === 'family') return;
     longPressTimer.current = window.setTimeout(() => {
         setSelectionMode(true);
         toggleSelection(word);
@@ -226,8 +190,11 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
   };
 
   const handleItemClick = (word: string) => {
-    if (selectionMode) toggleSelection(word);
-    else onNavigate(word, true);
+    if (selectionMode) {
+        toggleSelection(word);
+    } else {
+        onNavigate(word, true);
+    }
   };
 
   const handleBatchMoveToTrash = () => {
@@ -236,6 +203,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     onDeleteMultiple(wordsToTrash);
     setSelectionMode(false);
     setSelectedWords(new Set());
+
     if (undoTimeout.current) clearTimeout(undoTimeout.current);
     undoTimeout.current = window.setTimeout(() => setLastTrashed(null), 5000);
   };
@@ -282,6 +250,13 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                   FAVORITES ({favoriteWords.length})
               </button>
           </div>
+          <button className={`view-toggle-btn ${viewType === 'family' ? 'active' : ''}`} onClick={() => setViewType(prev => prev === 'list' ? 'family' : 'list')} title="Toggle Family View">
+            {viewType === 'list' ? (
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            ) : (
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            )}
+          </button>
       </div>
 
       <div className="filter-sort-bar">
@@ -298,89 +273,48 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
               >
                   ALPHABET {sortBy === 'alpha' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
-              
-              <button 
-                className={`family-view-toggle ${isFamilyView ? 'active' : ''}`}
-                onClick={() => {
-                    setIsFamilyView(!isFamilyView);
-                    setSelectionMode(false);
-                    setSelectedWords(new Set());
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 2-2 4 4 3-5"></path><path d="M11 20h10"></path><path d="m3 6 2-2 4 4 3-5"></path><path d="M11 10h10"></path></svg>
-                {isFamilyView ? 'ROOTS ON' : 'ROOTS'}
-              </button>
           </div>
-          {!isFamilyView && (
-              <div className="filter-chips">
-                  {(['all', 'new', 'learning', 'mastered'] as MasteryFilter[]).map(f => (
-                      <button key={f} className={`chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>{f.toUpperCase()}</button>
-                  ))}
-              </div>
-          )}
+          <div className="filter-chips">
+              {(['all', 'new', 'learning', 'mastered'] as MasteryFilter[]).map(f => (
+                  <button key={f} className={`chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>{f.toUpperCase()}</button>
+              ))}
+          </div>
       </div>
       
       <div className="words-scroll-list">
-        {isFamilyView ? (
-            groupedFamilies.length === 0 ? (
-                <div className="empty-state">
-                    <div className="icon">🌱</div>
-                    <p>No word families detected yet.</p>
-                </div>
-            ) : (
-                groupedFamilies.map(group => (
-                    <div 
-                      key={group.id} 
-                      className="modern-word-card family-card"
-                      onClick={() => setSelectedFamily(group)}
-                    >
-                        <div className="card-info">
-                            <div className="card-top-row">
-                                <span className="word-title family-main-title">{group.displayTitle}</span>
-                                <div className="card-indicators">
-                                    <span className="mastery-pill family-count">{group.savedMembers.length} SAVED</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="arrow-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                        </div>
-                    </div>
-                ))
-            )
-        ) : (
-            filteredAndSortedList.length === 0 ? (
-                <div className="empty-state">
-                    <div className="icon">{activeTab === 'all' ? '📚' : '❤️'}</div>
-                    <p>{filter === 'all' ? 'Your library is empty.' : 'No matches found.'}</p>
-                    {filter === 'all' && activeTab === 'all' && (
+        {viewType === 'list' ? (
+          filteredAndSortedList.length === 0 ? (
+              <div className="empty-state">
+                  <div className="icon">{activeTab === 'all' ? '📚' : '❤️'}</div>
+                  <p>{filter === 'all' ? 'Your library is empty.' : 'No matches found.'}</p>
+                  {filter === 'all' && activeTab === 'all' && (
                     <button className="auth-btn primary" style={{ marginTop: '1rem' }} onClick={onOpenImport}>
-                        Import Words
+                      Import Words
                     </button>
-                    )}
-                </div>
-            ) : (
-                filteredAndSortedList.map(word => {
-                    const item = srsData[word];
-                    const cache = cardCache[word];
-                    const mastery = item?.masteryLevel || 0;
-                    const revCount = item?.reviewCount || 0;
-                    const isFaved = favoriteWords.includes(word);
-                    const isSelected = selectedWords.has(word);
-                    
-                    let badgeClass = 'new';
-                    let badgeText = 'NEW';
-                    if (mastery >= 5) { 
-                        badgeClass = 'mastered'; 
-                        badgeText = 'MASTERED'; 
-                    }
-                    else if (mastery > 0 || (mastery === 0 && revCount > 0)) { 
-                        badgeClass = 'learning'; 
-                        badgeText = 'LEARNING'; 
-                    }
+                  )}
+              </div>
+          ) : (
+              filteredAndSortedList.map(word => {
+                  const item = srsData[word];
+                  const cache = cardCache[word];
+                  const mastery = item?.masteryLevel || 0;
+                  const revCount = item?.reviewCount || 0;
+                  const isFaved = favoriteWords.includes(word);
+                  const isSelected = selectedWords.has(word);
+                  
+                  let badgeClass = 'new';
+                  let badgeText = 'NEW';
+                  if (mastery >= 5) { 
+                      badgeClass = 'mastered'; 
+                      badgeText = 'MASTERED'; 
+                  }
+                  else if (mastery > 0 || (mastery === 0 && revCount > 0)) { 
+                      badgeClass = 'learning'; 
+                      badgeText = 'LEARNING'; 
+                  }
 
-                    return (
-                        <div 
+                  return (
+                      <div 
                         key={word} 
                         className={`modern-word-card ${isSelected ? 'selected' : ''} ${selectionMode ? 'selection-active' : ''}`}
                         onClick={() => handleItemClick(word)}
@@ -388,107 +322,118 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                         onPointerUp={cancelLongPress}
                         onPointerLeave={cancelLongPress}
                         onContextMenu={(e) => e.preventDefault()}
-                        >
-                            {selectionMode && (
-                                <div className={`checkbox ${isSelected ? 'checked' : ''}`}>
-                                    {isSelected && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"></polyline></svg>}
-                                </div>
-                            )}
-                            
-                            <div className="card-info">
-                                <div className="card-top-row">
-                                    <span className="word-title">{word}</span>
-                                    <div className="card-indicators">
-                                        {isFaved && <span className="fav-indicator">❤️</span>}
-                                        <span className={`mastery-pill ${badgeClass}`}>{badgeText}</span>
-                                        {!selectionMode && (
-                                            <button 
-                                                className="row-edit-btn" 
-                                                onClick={(e) => handleOpenEdit(e, word)}
-                                                title="Edit Word Data"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                                <p className="word-snippet">{cache ? cache.definition : 'AI details loading...'}</p>
-                                
-                                <div className="mastery-progress-bar">
-                                    {[1, 2, 3, 4, 5].map(step => (
-                                        <div 
-                                            key={step} 
-                                            className={`progress-dot ${mastery >= step ? 'filled' : ''} ${mastery >= 5 ? 'mastered' : ''}`}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
+                      >
+                          {selectionMode && (
+                              <div className={`checkbox ${isSelected ? 'checked' : ''}`}>
+                                  {isSelected && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                              </div>
+                          )}
+                          
+                          <div className="card-info">
+                              <div className="card-top-row">
+                                  <span className="word-title">{word}</span>
+                                  <div className="card-indicators">
+                                      {isFaved && <span className="fav-indicator">❤️</span>}
+                                      <span className={`mastery-pill ${badgeClass}`}>{badgeText}</span>
+                                      {!selectionMode && (
+                                          <button 
+                                              className="row-edit-btn" 
+                                              onClick={(e) => handleOpenEdit(e, word)}
+                                              title="Edit Word Data"
+                                          >
+                                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                          </button>
+                                      )}
+                                  </div>
+                              </div>
+                              <p className="word-snippet">{cache ? cache.definition : 'AI details loading...'}</p>
+                              
+                              <div className="mastery-progress-bar">
+                                  {[1, 2, 3, 4, 5].map(step => (
+                                      <div 
+                                          key={step} 
+                                          className={`progress-dot ${mastery >= step ? 'filled' : ''} ${mastery >= 5 ? 'mastered' : ''}`}
+                                      />
+                                  ))}
+                              </div>
+                          </div>
 
-                            {!selectionMode && (
-                                <div className="arrow-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })
-            )
+                          {!selectionMode && (
+                              <div className="arrow-icon">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </div>
+                          )}
+                      </div>
+                  );
+              })
+          )
+        ) : (
+          /* Grouped Family View Render */
+          familyGroups.length === 0 ? (
+            <div className="empty-state">
+              <div className="icon">🧭</div>
+              <p>No families found. Details are loaded once words are cached via AI.</p>
+            </div>
+          ) : (
+            familyGroups.map(group => {
+              const headerText = group.savedMembers.join(', ');
+              return (
+                <div key={group.id} className="family-entry compact" onClick={() => setSelectedFamilyGroup(group)}>
+                  <div className="family-header">
+                    <div className="family-title-group">
+                      <span className="family-icon">🌿</span>
+                      <span className="family-name">{headerText}</span>
+                    </div>
+                    <svg className="chevron-right" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </div>
+                </div>
+              );
+            })
+          )
         )}
       </div>
 
-      {selectedFamily && (
-          <div className="auth-overlay" onClick={() => setSelectedFamily(null)}>
-              <div className="family-modal" onClick={e => e.stopPropagation()}>
-                  <div className="modal-header">
-                      <div className="header-text">
-                        <span className="header-emoji">🌳</span>
-                        <span>Family Details</span>
-                      </div>
-                      <button className="close-x-btn" onClick={() => setSelectedFamily(null)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                      </button>
-                  </div>
-                  <div className="modal-scroll-area">
-                      <p className="modal-hint">All related forms for this word family.</p>
-                      <div className="family-member-list">
-                          {selectedFamily.allMembers.map(m => {
-                              const capitalizedWord = capitalize(m.word);
-                              const isSaved = savedWords.includes(capitalizedWord);
-                              const item = srsData[capitalizedWord];
-                              const cache = cardCache[capitalizedWord];
-                              const mastery = item?.masteryLevel || 0;
-
-                              return (
-                                  <div 
-                                    key={`${m.word}-${m.pos}`} 
-                                    className={`member-row ${isSaved ? 'is-saved' : ''}`}
-                                    onClick={() => onNavigate(capitalizedWord, true)}
-                                  >
-                                      <div className="member-main">
-                                          <div className="member-name-row">
-                                              <span className="member-name">{capitalizedWord}</span>
-                                              {m.pos && <span className="member-pos">({m.pos})</span>}
-                                              {isSaved && <span className="member-saved-badge">LIBRARY</span>}
-                                          </div>
-                                          {isSaved && (
-                                              <p className="member-def">{cache?.definition || 'View details...'}</p>
-                                          )}
-                                      </div>
-                                      {isSaved && (
-                                          <div className="member-mastery">
-                                              <div className={`mastery-dot ${mastery >= 5 ? 'mastered' : (mastery > 0 ? 'learning' : 'new')}`} />
-                                          </div>
-                                      )}
-                                      <div className="member-arrow">
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                      </div>
-                                  </div>
-                              );
-                          })}
-                      </div>
-                  </div>
+      {/* Family Detail Modal */}
+      {selectedFamilyGroup && (
+        <div className="auth-overlay" onClick={() => setSelectedFamilyGroup(null)}>
+          <div className="auth-container family-modal" onClick={e => e.stopPropagation()}>
+            <div className="auth-header">
+              <div className="header-info-group">
+                <h3 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Word Family</h3>
               </div>
+              <button onClick={() => setSelectedFamilyGroup(null)} className="close-button-cross">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            <div className="family-modal-content">
+              <div className="family-members-grid">
+                {selectedFamilyGroup.allMembers.map(m => {
+                  const capitalizedWord = capitalize(m.word);
+                  const isSaved = savedWords.includes(capitalizedWord);
+                  const cache = cardCache[capitalizedWord];
+                  return (
+                    <div 
+                      key={m.word} 
+                      className={`family-member-card ${isSaved ? 'saved' : ''}`}
+                      onClick={() => isSaved && onNavigate(capitalizedWord, true)}
+                    >
+                      <div className="member-main-info">
+                        <span className="member-word">{capitalizedWord}</span>
+                        {m.pos && <span className="member-pos">({m.pos})</span>}
+                        {isSaved && <span className="saved-badge">LIBRARY</span>}
+                      </div>
+                      {isSaved && cache?.definition && (
+                        <p className="member-snippet-oneline">
+                          {cache.definition}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
+        </div>
       )}
 
       {editingWord && (
@@ -517,22 +462,14 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .list-tabs button.active { background: var(--card-bg); color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.1); }
         .list-tabs button.active.fav { color: #ff2d55; }
         
+        .view-toggle-btn { width: 44px; height: 44px; border-radius: 14px; background: var(--accent-secondary); color: var(--accent-primary); border: 1.5px solid var(--border-color); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .view-toggle-btn.active { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
+
         .filter-sort-bar { margin: 0 4px 1.5rem 4px; display: flex; flex-direction: column; gap: 14px; }
-        .sort-toggles { display: flex; gap: 10px; flex-wrap: wrap; }
+        .sort-toggles { display: flex; gap: 10px; }
         .sort-toggles button { font-size: 0.65rem; font-weight: 800; padding: 10px 16px; border-radius: 12px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); letter-spacing: 0.5px; }
         .sort-toggles button.active { background: var(--accent-primary); color: white; border-color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); }
         
-        .family-view-toggle {
-            display: flex; align-items: center; gap: 6px;
-            background: var(--accent-secondary) !important;
-            color: var(--accent-primary) !important;
-            border-color: var(--accent-primary) !important;
-        }
-        .family-view-toggle.active {
-            background: var(--accent-primary) !important;
-            color: white !important;
-        }
-
         .filter-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
         .filter-chips::-webkit-scrollbar { display: none; }
         .chip { white-space: nowrap; font-size: 0.65rem; font-weight: 800; padding: 8px 18px; border-radius: 20px; border: 1.5px solid var(--border-color); color: var(--text-muted); background: transparent; transition: all 0.2s; }
@@ -540,6 +477,75 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
 
         .words-scroll-list { display: flex; flex-direction: column; gap: 0.75rem; padding: 0 4px; }
         
+        .family-entry { 
+          background: var(--card-bg); 
+          border-radius: 20px; 
+          border: 1px solid var(--border-color); 
+          cursor: pointer; 
+          transition: all 0.2s;
+        }
+        .family-entry:active { transform: scale(0.98); background: var(--accent-secondary); }
+        .family-header { padding: 1.25rem; display: flex; justify-content: space-between; align-items: center; }
+        .family-title-group { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+        .family-icon { font-size: 1.2rem; flex-shrink: 0; }
+        .family-name { 
+          font-weight: 800; 
+          font-size: 1rem; 
+          color: var(--text-primary); 
+          white-space: nowrap; 
+          overflow: hidden; 
+          text-overflow: ellipsis; 
+          letter-spacing: -0.2px;
+        }
+        .chevron-right { color: var(--text-muted); opacity: 0.5; }
+
+        .family-modal { max-width: 440px; width: 92%; padding: 1.5rem; max-height: 85vh; display: flex; flex-direction: column; }
+        .family-modal-content { overflow-y: auto; padding-top: 0.5rem; }
+        .family-members-grid { display: flex; flex-direction: column; gap: 12px; }
+        .family-member-card { 
+          padding: 1.15rem; 
+          background: var(--bg-color); 
+          border-radius: 20px; 
+          display: flex; 
+          flex-direction: column;
+          gap: 6px;
+          border: 1px solid var(--border-color);
+          transition: all 0.2s;
+        }
+        .family-member-card.saved { 
+          background: var(--card-bg);
+          border-color: var(--accent-primary); 
+          cursor: pointer;
+          box-shadow: 0 4px 15px rgba(88, 86, 214, 0.05);
+        }
+        .family-member-card.saved:active { transform: scale(0.98); background: var(--accent-secondary); }
+        
+        .member-main-info { display: flex; align-items: center; gap: 8px; }
+        .member-word { font-weight: 800; color: var(--text-primary); font-size: 1.1rem; }
+        .member-pos { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
+        .saved-badge { 
+          margin-left: auto; 
+          font-size: 0.6rem; 
+          font-weight: 900; 
+          background: var(--accent-primary); 
+          color: white; 
+          padding: 3px 8px; 
+          border-radius: 6px;
+          letter-spacing: 0.5px;
+        }
+        
+        .member-snippet-oneline {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            opacity: 0.9;
+        }
+
         .modern-word-card { 
             background: var(--card-bg); 
             border-radius: 20px; 
@@ -554,19 +560,10 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         }
         .modern-word-card:active { transform: scale(0.98); background: var(--bg-color); }
         .modern-word-card.selected { background: var(--accent-secondary); border-color: var(--accent-primary); }
-        .modern-word-card.family-card { border-left: 4px solid var(--accent-primary); }
-
+        
         .card-info { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
         .card-top-row { display: flex; justify-content: space-between; align-items: flex-start; }
         .word-title { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.3px; }
-        .family-main-title {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            font-size: 1rem;
-            line-height: 1.3;
-        }
         
         .card-indicators { display: flex; align-items: center; gap: 6px; }
         .fav-indicator { font-size: 0.8rem; }
@@ -595,7 +592,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .mastery-pill.new { background: var(--accent-secondary); color: var(--accent-primary); }
         .mastery-pill.learning { background: rgba(255, 193, 7, 0.1); color: #f57f17; }
         .mastery-pill.mastered { background: rgba(0, 200, 83, 0.1); color: #2e7d32; }
-        .mastery-pill.family-count { background: var(--accent-primary); color: white; white-space: nowrap; }
         
         .word-snippet { 
             font-size: 0.8rem; 
@@ -614,42 +610,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .progress-dot.mastered { background: var(--success-color); }
         
         .arrow-icon { color: var(--text-muted); opacity: 0.5; }
-
-        .family-modal {
-            width: 95%; max-width: 420px;
-            background: var(--card-bg); border-radius: 28px;
-            display: flex; flex-direction: column; overflow: hidden;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-            animation: familyModalUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-        @keyframes familyModalUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        
-        .family-modal .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .family-modal .modal-scroll-area { padding: 1.25rem; flex: 1; overflow-y: auto; max-height: 60vh; }
-        .modal-hint { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1.25rem; font-weight: 600; }
-        
-        .family-member-list { display: flex; flex-direction: column; gap: 10px; }
-        .member-row {
-            padding: 1rem; border-radius: 16px; background: var(--bg-color); border: 1px solid var(--border-color);
-            display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s;
-        }
-        .member-row:active { transform: scale(0.98); background: var(--accent-secondary); }
-        .member-row.is-saved { background: var(--card-bg); border-color: var(--accent-primary); }
-        
-        .member-main { flex: 1; min-width: 0; }
-        .member-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-        .member-name { font-weight: 800; font-size: 1rem; color: var(--text-primary); }
-        .member-pos { font-size: 0.7rem; color: var(--accent-primary); font-weight: 700; opacity: 0.7; }
-        .member-saved-badge { font-size: 0.6rem; font-weight: 900; color: white; background: var(--accent-primary); padding: 2px 6px; border-radius: 4px; }
-        .member-def { font-size: 0.75rem; color: var(--text-secondary); margin: 4px 0 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        
-        .member-mastery { width: 10px; height: 10px; }
-        .mastery-dot { width: 8px; height: 8px; border-radius: 50%; }
-        .mastery-dot.new { background: var(--accent-secondary); }
-        .mastery-dot.learning { background: #ffc107; }
-        .mastery-dot.mastered { background: var(--success-color); }
-        
-        .member-arrow { color: var(--text-muted); opacity: 0.4; }
 
         .selection-bar { position: fixed; top: 0; left: 0; width: 100%; height: 70px; background: var(--accent-primary); color: white; z-index: 1000; display: flex; align-items: center; padding: 0 1.2rem; gap: 1rem; box-shadow: 0 8px 30px rgba(88, 86, 214, 0.3); animation: slideDown 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
         @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }

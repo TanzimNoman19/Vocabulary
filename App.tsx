@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -14,9 +13,8 @@ import ProfileView from './components/ProfileView';
 import BulkImportModal from './components/BulkImportModal';
 import CardSettingsModal from './components/CardSettingsModal';
 import TrashModal from './components/TrashModal';
-import LiveConversationView from './components/LiveConversationView';
 
-type Tab = 'home' | 'live' | 'saved' | 'profile';
+type Tab = 'home' | 'saved' | 'profile';
 
 export interface VisibilitySettings {
   definition: boolean;
@@ -226,6 +224,7 @@ const App: React.FC = () => {
               setShouldStartFlipped(false);
               setCurrentTopic(capitalize(explorePack[nextIdx]));
           } else {
+              // End of current cumulative pack, trigger automatic generation of next pack
               handleToggleExplore(true);
           }
           return;
@@ -252,7 +251,7 @@ const App: React.FC = () => {
             setCurrentTopic(capitalize(explorePack[prevIdx]));
           }
       } else if (word === '__GENERATE__') {
-          handleToggleExplore(true);
+          handleToggleExplore(true); // Explicit regeneration
       } else {
           setShouldStartFlipped(initialFlipped);
           setCurrentTopic(capitalize(word));
@@ -298,16 +297,18 @@ const App: React.FC = () => {
       }
       setIsExploring(true);
       try {
+        // Exclude both saved words and already explored words in this session
         const wordsToExclude = [...savedWords, ...explorePack];
         const pack = await fetchExplorePack('intermediate', explorePackSize, wordsToExclude);
         
         if (pack.length > 0) {
+          // Robust filter to ensure strictly no duplicates
           const newPackWords = pack
             .map(p => capitalize(p.word!))
             .filter(w => w && !savedWords.includes(w) && !explorePack.includes(w));
           
           if (newPackWords.length === 0) {
-              alert("Gemini couldn't find unique words that aren't already in your library.");
+              alert("Gemini couldn't find unique words that aren't already in your library. Try changing the level or count.");
               setIsExploring(false);
               return;
           }
@@ -322,11 +323,13 @@ const App: React.FC = () => {
           setCardCache(newCache);
           
           if (forceNext && isExploreMode) {
+              // APPEND mode: Add to existing session list
               const nextIdx = explorePack.length;
               setExplorePack(prev => [...prev, ...newPackWords]);
               setExploreIndex(nextIdx);
               setCurrentTopic(newPackWords[0]);
           } else {
+              // INITIAL mode: Start new session
               setExplorePack(newPackWords);
               setExploreIndex(0);
               setIsExploreMode(true);
@@ -337,7 +340,7 @@ const App: React.FC = () => {
           handleCacheUpdate(newPackWords[0], pack.find(p => capitalize(p.word!) === newPackWords[0]) || pack[0]);
         }
       } catch (e) {
-        alert("Failed to fetch explore pack.");
+        alert("Failed to fetch explore pack. Try again later.");
       } finally {
         setIsExploring(false);
       }
@@ -485,7 +488,7 @@ const App: React.FC = () => {
                </button>
             )}
 
-            {(activeTab === 'saved' || activeTab === 'live') && (
+            {activeTab === 'saved' && (
               <div className="header-dynamic-actions" style={{ display: 'flex', gap: '8px' }}>
                 <button className="icon-btn header-import-btn" onClick={() => setIsBulkImportOpen(true)} title="Import Words">
                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
@@ -560,12 +563,6 @@ const App: React.FC = () => {
               exploreProgress={isExploreMode ? { current: exploreIndex + 1, total: explorePack.length } : undefined}
             />
         )}
-        {activeTab === 'live' && (
-            <LiveConversationView 
-              onSaveWord={(word) => handleToggleSave(word)}
-              savedWords={savedWords}
-            />
-        )}
         {activeTab === 'saved' && (
             <SavedWordsList 
                 savedWords={savedWords} 
@@ -584,17 +581,13 @@ const App: React.FC = () => {
         {activeTab === 'profile' && <ProfileView user={user} savedCount={savedWords.length} cachedCount={cachedCount} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} isOnline={isOnline} onResetSRS={handleResetSRS} />}
       </main>
 
-      <div className="bottom-nav-container" style={{ maxWidth: '420px' }}>
+      <div className="bottom-nav-container">
         <nav className="bottom-nav">
-            <div className={`nav-indicator pos-${activeTab}`} style={{ width: 'calc(25% - 8px)' }} />
+            <div className={`nav-indicator pos-${activeTab}`} />
             
             <button className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 <span>Study</span>
-            </button>
-            <button className={`nav-item ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                <span>Live</span>
             </button>
             <button className={`nav-item ${activeTab === 'saved' ? 'active' : ''}`} onClick={() => setActiveTab('saved')}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
@@ -608,11 +601,6 @@ const App: React.FC = () => {
       </div>
 
       <style>{`
-        .pos-home { transform: translateX(0); }
-        .pos-live { transform: translateX(100%); }
-        .pos-saved { transform: translateX(200%); }
-        .pos-profile { transform: translateX(300%); }
-
         .icon-btn {
           width: 40px;
           height: 40px;
@@ -647,11 +635,11 @@ const App: React.FC = () => {
             box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2);
         }
         .sparkle-icon-colorful {
-            color: #FFD700;
+            color: #FFD700; /* Gold default */
             filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.3));
         }
         .header-explore-btn.active .sparkle-icon-colorful {
-            color: #FFF;
+            color: #FFF; /* White when button is active background */
         }
         .icon-btn:hover, .header-explore-btn:hover {
           background: var(--border-color);
