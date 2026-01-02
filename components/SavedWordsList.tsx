@@ -88,11 +88,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     return list;
   }, [baseList, sortBy, sortOrder, filter, srsData, savedWords]);
 
-  /**
-   * Logical Set Union Grouping:
-   * Fixed: Added a block to ignore generic placeholder text like "None" or "N/A"
-   * to prevent unrelated words from being merged together.
-   */
   const familyGroups = useMemo(() => {
     if (viewType !== 'family') return [];
 
@@ -100,7 +95,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
       if (!str) return [];
       const trimmed = str.trim();
       const lower = trimmed.toLowerCase();
-      // Exclude generic placeholder text from being used as a grouping key
       if (lower === 'none' || lower === 'n/a' || lower === 'pending' || lower === 'waiting') return [];
 
       return trimmed.split(',').map(m => {
@@ -121,7 +115,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
       const cache = cardCache[word];
       const members = parseMembers(cache?.family || '');
       
-      // Ensure the saved word itself is always in its own family set
       if (!members.find(m => m.word === word.toLowerCase())) {
         members.push({ word: word.toLowerCase(), pos: cache?.pos || '' });
       }
@@ -132,7 +125,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
       });
     });
 
-    // Merge logic (Connected Components / Disjoint Set Union)
     let changed = true;
     while (changed) {
       changed = false;
@@ -143,7 +135,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
           );
 
           if (hasCommon) {
-            // Merge j into i
             const mergedAll = [...clusters[i].all];
             clusters[j].all.forEach(m => {
               if (!mergedAll.find(existing => existing.word === m.word)) {
@@ -269,13 +260,6 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                   FAVORITES ({favoriteWords.length})
               </button>
           </div>
-          <button className={`view-toggle-btn ${viewType === 'family' ? 'active' : ''}`} onClick={() => setViewType(prev => prev === 'list' ? 'family' : 'list')} title="Toggle Family View">
-            {viewType === 'list' ? (
-               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-            ) : (
-               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-            )}
-          </button>
       </div>
 
       <div className="filter-sort-bar">
@@ -290,7 +274,15 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 className={sortBy === 'alpha' ? 'active' : ''} 
                 onClick={() => { if (sortBy === 'alpha') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else setSortBy('alpha'); }}
               >
-                  ALPHABET {sortBy === 'alpha' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  A-Z {sortBy === 'alpha' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </button>
+              
+              <button className={`view-toggle-btn ${viewType === 'family' ? 'active' : ''}`} onClick={() => setViewType(prev => prev === 'list' ? 'family' : 'list')} title="Toggle Family View">
+                {viewType === 'list' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                )}
               </button>
           </div>
           <div className="filter-chips">
@@ -481,13 +473,13 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .list-tabs button.active { background: var(--card-bg); color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.1); }
         .list-tabs button.active.fav { color: #ff2d55; }
         
-        .view-toggle-btn { width: 44px; height: 44px; border-radius: 14px; background: var(--accent-secondary); color: var(--accent-primary); border: 1.5px solid var(--border-color); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .view-toggle-btn { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-secondary); color: var(--accent-primary); border: 1.5px solid var(--border-color); display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
         .view-toggle-btn.active { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
 
         .filter-sort-bar { margin: 0 4px 1.5rem 4px; display: flex; flex-direction: column; gap: 14px; }
-        .sort-toggles { display: flex; gap: 10px; }
-        .sort-toggles button { font-size: 0.65rem; font-weight: 800; padding: 10px 16px; border-radius: 12px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); letter-spacing: 0.5px; }
-        .sort-toggles button.active { background: var(--accent-primary); color: white; border-color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); }
+        .sort-toggles { display: flex; gap: 10px; align-items: center; }
+        .sort-toggles button:not(.view-toggle-btn) { font-size: 0.65rem; font-weight: 800; padding: 10px 16px; border-radius: 12px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); letter-spacing: 0.5px; height: 38px; display: flex; align-items: center; justify-content: center; }
+        .sort-toggles button.active:not(.view-toggle-btn) { background: var(--accent-primary); color: white; border-color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2); }
         
         .filter-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
         .filter-chips::-webkit-scrollbar { display: none; }
