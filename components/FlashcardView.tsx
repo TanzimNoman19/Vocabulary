@@ -265,13 +265,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                   </>
                 )}
 
-                {visibilitySettings.etymology && data.etymology && (
-                    <>
-                    <div className="section-label">ORIGIN / ETYMOLOGY</div>
-                    <div className="etymology-text">{String(data.etymology)}</div>
-                    </>
-                )}
-
                 <div className="synonyms-antonyms-container">
                     {(visibilitySettings.synonyms && synonymsList.length > 0) && (
                       <div className="sa-column">

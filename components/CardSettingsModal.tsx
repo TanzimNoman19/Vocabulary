@@ -13,15 +13,16 @@ interface CardSettingsModalProps {
   onUpdatePackSize: (n: number) => void;
   definitionStyle: string;
   onUpdateDefinitionStyle: (s: string) => void;
+  theme: 'light' | 'dark';
+  onUpdateTheme: (t: 'light' | 'dark') => void;
   onClose: () => void;
 }
 
-type ActiveSection = 'visibility' | 'explore' | 'ai' | 'advanced' | null;
+type ActiveSection = 'visibility' | 'explore' | 'ai' | 'appearance' | 'advanced' | null;
 
 const CardSettingsModal: React.FC<CardSettingsModalProps> = ({ 
-    visibility, onUpdateVisibility, explorePackSize, onUpdatePackSize, definitionStyle, onUpdateDefinitionStyle, onClose 
+    visibility, onUpdateVisibility, explorePackSize, onUpdatePackSize, definitionStyle, onUpdateDefinitionStyle, theme, onUpdateTheme, onClose 
 }) => {
-  // Set initial state to null so all sections are collapsed by default
   const [activeSection, setActiveSection] = useState<ActiveSection>(null);
 
   const toggleSection = (section: ActiveSection) => {
@@ -39,7 +40,6 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
     { key: 'synonyms', label: 'Synonyms' },
     { key: 'antonyms', label: 'Antonyms' },
     { key: 'family', label: 'Word Family' },
-    { key: 'etymology', label: 'Etymology (Origin)' },
     { key: 'usageNotes', label: 'Usage Notes' }
   ];
 
@@ -47,7 +47,6 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
     <div className="auth-overlay" onClick={onClose}>
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
         
-        {/* FIXED HEADER */}
         <div className="modal-header">
           <h2 className="modal-title">Settings</h2>
           <button onClick={onClose} className="header-close-btn" aria-label="Close">
@@ -55,11 +54,36 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
           </button>
         </div>
 
-        {/* SCROLLABLE BODY */}
         <div className="modal-scroll-area">
           <div className="settings-stack">
             
-            {/* ACCORDION: CARD VISIBILITY */}
+            <div className={`accordion-box ${activeSection === 'appearance' ? 'active' : ''}`}>
+              <div className="accordion-header" onClick={() => toggleSection('appearance')}>
+                <div className="header-text">
+                  <span className="header-emoji">🎨</span>
+                  <span>Appearance</span>
+                </div>
+                <svg className="chevron" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+              <div className="accordion-content">
+                <p className="content-hint">Choose your preferred application theme.</p>
+                <div className="segmented-selector">
+                  <button 
+                    className={`segment-btn ${theme === 'light' ? 'active' : ''}`}
+                    onClick={() => onUpdateTheme('light')}
+                  >
+                    Light
+                  </button>
+                  <button 
+                    className={`segment-btn ${theme === 'dark' ? 'active' : ''}`}
+                    onClick={() => onUpdateTheme('dark')}
+                  >
+                    Dark
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className={`accordion-box ${activeSection === 'visibility' ? 'active' : ''}`}>
               <div className="accordion-header" onClick={() => toggleSection('visibility')}>
                 <div className="header-text">
@@ -83,7 +107,6 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
               </div>
             </div>
 
-            {/* ACCORDION: EXPLORE MODE */}
             <div className={`accordion-box ${activeSection === 'explore' ? 'active' : ''}`}>
               <div className="accordion-header" onClick={() => toggleSection('explore')}>
                 <div className="header-text">
@@ -112,7 +135,6 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
               </div>
             </div>
 
-            {/* ACCORDION: AI CONTENT STYLE */}
             <div className={`accordion-box ${activeSection === 'ai' ? 'active' : ''}`}>
               <div className="accordion-header" onClick={() => toggleSection('ai')}>
                 <div className="header-text">
@@ -137,26 +159,9 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
               </div>
             </div>
 
-            {/* ACCORDION: ADVANCED */}
-            <div className={`accordion-box advanced-placeholder ${activeSection === 'advanced' ? 'active' : ''}`}>
-              <div className="accordion-header" onClick={() => toggleSection('advanced')}>
-                <div className="header-text">
-                  <span className="header-emoji">⚙️</span>
-                  <span>Advanced</span>
-                </div>
-                <svg className="chevron" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </div>
-              <div className="accordion-content">
-                <p className="content-hint" style={{ textAlign: 'center', opacity: 0.6 }}>
-                  Cloud sync frequency, audio playback settings, and dark mode themes coming soon.
-                </p>
-              </div>
-            </div>
-
           </div>
         </div>
 
-        {/* FIXED FOOTER */}
         <div className="modal-footer">
           <button className="auth-btn primary full-save-btn" onClick={onClose}>
             Save & Exit
@@ -233,7 +238,6 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
 
           .full-save-btn { width: 100%; font-weight: 800; font-size: 1rem; height: 56px; border-radius: 18px; }
 
-          /* Accordion Styling */
           .accordion-box {
             background: var(--bg-color);
             border: 2px solid var(--border-color);
@@ -283,7 +287,6 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
 
           .content-hint { font-size: 0.85rem; color: var(--text-secondary); margin: 0; line-height: 1.4; font-weight: 500; }
 
-          /* Toggles */
           .visibility-grid { display: flex; flex-direction: column; gap: 8px; }
           .toggle-row {
             display: flex;
@@ -320,7 +323,6 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
           }
           .modern-switch.on .switch-thumb { transform: translateX(22px); }
 
-          /* Slider */
           .slider-group { display: flex; flex-direction: column; gap: 12px; }
           .slider-labels { display: flex; justify-content: space-between; align-items: center; }
           .slider-title { font-weight: 800; color: var(--text-primary); font-size: 0.95rem; }
@@ -336,14 +338,16 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
             cursor: pointer;
           }
 
-          /* Segmented Control */
           .segmented-selector {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             background: var(--accent-secondary);
             padding: 4px;
             border-radius: 16px;
             gap: 4px;
+          }
+          .accordion-box[class*="ai"] .segmented-selector {
+            grid-template-columns: 1fr 1fr 1fr;
           }
           .segment-btn {
             padding: 10px 4px;
@@ -358,8 +362,6 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
             color: white;
             box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2);
           }
-
-          .advanced-placeholder { border-style: dashed; opacity: 0.7; }
         `}</style>
       </div>
     </div>

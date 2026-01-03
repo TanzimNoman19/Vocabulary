@@ -33,8 +33,7 @@ export interface CardData {
   synonyms: string;
   antonyms: string;
   difficulty: string;
-  // Added optional properties for consistency with dictionaryService
-  etymology?: string;
+  // Removed etymology property
   usage_notes?: string;
   source?: string;
   word?: string;

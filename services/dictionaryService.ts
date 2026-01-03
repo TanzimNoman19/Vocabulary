@@ -18,7 +18,6 @@ export interface CardData {
   synonyms: string;
   antonyms: string;
   difficulty: string;
-  etymology?: string;
   usage_notes?: string;
   source?: string;
   word?: string;
@@ -82,7 +81,7 @@ export async function fetchWordData(word: string, definitionStyle: string = 'sta
   const prompt = `Define the English word "${normalizedWord}" for a vocabulary flashcard.
   ${styleInstruction}
   Return a JSON object with the following keys:
-  "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
+  "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "usage_notes".
   RULES:
   1. "family": Include related forms WITH their part of speech in brackets. Example: "happily (adv), happiness (n)".
   2. "bengali": Provide an elaborative definition.
@@ -161,7 +160,7 @@ export async function fetchExplorePack(level: VocabLevel = 'intermediate', count
   MANDATORY: For EVERY word, provide the COMPREHENSIVE details. You MUST not skip "definition" or "pos".
   
   Return a JSON array of objects with the following EXACT keys for each word:
-  "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
+  "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "usage_notes".
   
   RULES:
   1. "family": You MUST include related forms WITH their part of speech in brackets. Example: "happily (adv), happiness (n), happy (adj)".
@@ -196,14 +195,13 @@ export async function generateBulkWordData(words: string[]): Promise<Record<stri
   const prompt = `Generate comprehensive vocabulary flashcard data for the following words: ${words.join(', ')}.
   
   For EACH word, return an object with EXACTLY these keys:
-  "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
+  "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "usage_notes".
   
   CRITICAL REQUIREMENTS:
   1. "word": The input word capitalized (first letter only, rest lowercase).
   2. "family": List related forms WITH POS in brackets (e.g. "happily (adv), happiness (n)").
   3. "usage_notes": Provide 1-2 creative tips using [TRAP], [MNEMONIC], [VIBE], or [TIP] tags.
-  4. "etymology": Brief origin story.
-  5. "bengali": Accurate Bengali meaning without phonetic brackets.
+  4. "bengali": Accurate Bengali meaning without phonetic brackets.
   
   Return as a raw JSON array of objects only. No markdown.`;
 

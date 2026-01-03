@@ -86,6 +86,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
       parsed.forEach((item: any) => {
         if (!item.word) return;
         const wordKey = item.word;
+        // Fix: Removed 'etymology' property as it is no longer defined in CardData interface.
         newCache[wordKey] = {
           pos: item.pos || '',
           ipa: item.ipa || '',
@@ -96,7 +97,6 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
           synonyms: item.synonyms || '',
           antonyms: item.antonyms || '',
           difficulty: item.difficulty || '',
-          etymology: item.etymology || '',
           usage_notes: item.usage_notes || ''
         };
       });
