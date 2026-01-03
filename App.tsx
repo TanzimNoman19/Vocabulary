@@ -60,11 +60,9 @@ const App: React.FC = () => {
   const [srsData, setSrsData] = useState<Record<string, SRSItem>>(() => JSON.parse(localStorage.getItem('srsData') || '{}'));
   const [cardCache, setCardCache] = useState<Record<string, CardData>>(() => JSON.parse(localStorage.getItem('cardCache') || '{}'));
   
-  // Clusters and Settings
   const [semanticClusters, setSemanticClusters] = useState<SemanticCluster[]>(() => JSON.parse(localStorage.getItem('semanticClusters') || '[]'));
   const [clusterSimilarity, setClusterSimilarity] = useState<number>(() => Number(localStorage.getItem('clusterSimilarity')) || 1);
 
-  // Migration Effect
   useEffect(() => {
     let hasChanged = false;
     const sanitizeList = (list: string[]) => {
@@ -306,17 +304,24 @@ const App: React.FC = () => {
       }
       setIsExploring(true);
       try {
-        const wordsToExclude = [...savedWords, ...explorePack];
+        const savedLower = new Set(savedWords.map(w => w.toLowerCase()));
+        const trashedLower = new Set(trashedWords.map(w => w.toLowerCase()));
+        const packLower = new Set(explorePack.map(w => w.toLowerCase()));
+        
+        const wordsToExclude = [...savedWords, ...explorePack, ...trashedWords];
         const pack = await fetchExplorePack('intermediate', explorePackSize, wordsToExclude);
+        
         if (pack.length > 0) {
           const newPackWords = pack
-            .map(p => capitalize(p.word!))
-            .filter(w => w && !savedWords.includes(w) && !explorePack.includes(w));
+            .filter(p => p.word && !savedLower.has(p.word.toLowerCase()) && !trashedLower.has(p.word.toLowerCase()) && !packLower.has(p.word.toLowerCase()))
+            .map(p => capitalize(p.word!));
+            
           if (newPackWords.length === 0) {
               alert("Gemini couldn't find unique words that aren't already in your library.");
               setIsExploring(false);
               return;
           }
+          
           const newCache = { ...cardCache };
           pack.forEach(p => { 
             if(p.word) {
@@ -325,6 +330,7 @@ const App: React.FC = () => {
             }
           });
           setCardCache(newCache);
+          
           if (forceNext && isExploreMode) {
               const nextIdx = explorePack.length;
               setExplorePack(prev => [...prev, ...newPackWords]);
@@ -514,28 +520,6 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {isBulkImportOpen && <BulkImportModal onClose={() => setIsBulkImportOpen(false)} onImport={handleImportWords} />}
-      {isSettingsOpen && (
-        <CardSettingsModal 
-            visibility={visibilitySettings} 
-            onUpdateVisibility={setVisibilitySettings}
-            explorePackSize={explorePackSize}
-            onUpdatePackSize={setExplorePackSize}
-            definitionStyle={definitionStyle}
-            onUpdateDefinitionStyle={setDefinitionStyle}
-            onClose={() => setIsSettingsOpen(false)} 
-        />
-      )}
-      {isTrashOpen && (
-          <TrashModal 
-            trashedWords={trashedWords} 
-            cardCache={cardCache}
-            onClose={() => setIsTrashOpen(false)} 
-            onRestore={handleRestoreFromTrash} 
-            onPermanentDelete={handlePermanentDelete}
-          />
-      )}
-
       <main className="main-content">
         {!isOnline && (
             <div className="offline-banner">
@@ -604,6 +588,28 @@ const App: React.FC = () => {
             </button>
         </nav>
       </div>
+
+      {isBulkImportOpen && <BulkImportModal onClose={() => setIsBulkImportOpen(false)} onImport={handleImportWords} />}
+      {isSettingsOpen && (
+        <CardSettingsModal 
+            visibility={visibilitySettings} 
+            onUpdateVisibility={setVisibilitySettings}
+            explorePackSize={explorePackSize}
+            onUpdatePackSize={setExplorePackSize}
+            definitionStyle={definitionStyle}
+            onUpdateDefinitionStyle={setDefinitionStyle}
+            onClose={() => setIsSettingsOpen(false)} 
+        />
+      )}
+      {isTrashOpen && (
+          <TrashModal 
+            trashedWords={trashedWords} 
+            cardCache={cardCache}
+            onClose={() => setIsTrashOpen(false)} 
+            onRestore={handleRestoreFromTrash} 
+            onPermanentDelete={handlePermanentDelete}
+          />
+      )}
 
       <style>{`
         .icon-btn {

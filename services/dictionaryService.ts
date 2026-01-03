@@ -78,15 +78,17 @@ export async function fetchWordData(word: string, definitionStyle: string = 'sta
   const styleInstruction = definitionStyle === 'concise' 
     ? 'Keep the definition very brief (under 12 words).' 
     : (definitionStyle === 'detailed' ? 'Provide a rich, nuanced definition (approx 30-40 words).' : 'Provide a standard, clear definition.');
+  
   const prompt = `Define the English word "${normalizedWord}" for a vocabulary flashcard.
   ${styleInstruction}
   Return a JSON object with the following keys:
   "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
   RULES:
-  1. "family": Include related forms WITH their part of speech in brackets.
+  1. "family": Include related forms WITH their part of speech in brackets. Example: "happily (adv), happiness (n)".
   2. "bengali": Provide an elaborative definition.
   3. "usage_notes": Use [TRAP], [MNEMONIC], [VIBE], [TIP].
   Format: Raw JSON only.`;
+  
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -149,19 +151,25 @@ export async function generateSemanticClusters(words: string[], level: number = 
 export async function fetchExplorePack(level: VocabLevel = 'intermediate', count: number = 10, excludeWords: string[] = []): Promise<CardData[]> {
   if (!navigator.onLine) throw new Error("Offline: Cannot explore new words.");
   const ai = getAIClient();
-  const excludeInstruction = excludeWords.length > 0 ? `CRITICAL: Do not include any of these words in the output: ${excludeWords.slice(-200).join(', ')}.` : '';
-  const prompt = `Generate a pack of ${count} unique, sophisticated English vocabulary words suitable for a ${level} level learner.
+  const excludeInstruction = excludeWords.length > 0 
+    ? `CRITICAL MANDATORY RULE: Do NOT include any of these words in the output: ${excludeWords.slice(-300).join(', ')}. No exceptions.` 
+    : '';
+  
+  const prompt = `Generate a pack of ${count} unique, interesting English vocabulary words suitable for a ${level} level learner.
   ${excludeInstruction}
   
-  MANDATORY: For EVERY word, provide the COMPREHENSIVE details.
+  MANDATORY: For EVERY word, provide the COMPREHENSIVE details. You MUST not skip "definition" or "pos".
   
   Return a JSON array of objects with the following EXACT keys for each word:
   "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
   
-  Example requirement for "definition": Provide a clear, dictionary-grade English meaning.
-  Example requirement for "bengali": Provide an accurate Bangla meaning.
+  RULES:
+  1. "family": You MUST include related forms WITH their part of speech in brackets. Example: "happily (adv), happiness (n), happy (adj)".
+  2. "definition": Provide a clear, dictionary-grade English meaning.
+  3. "bengali": Provide an accurate Bangla meaning.
   
   Format: Raw JSON array only. No markdown formatting or extra text.`;
+  
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -171,7 +179,7 @@ export async function fetchExplorePack(level: VocabLevel = 'intermediate', count
     const data = JSON.parse(response.text || '[]');
     return data.map(item => ({ 
       ...item, 
-      word: capitalize(item.word), 
+      word: capitalize(item.word || ''), 
       bengali: item.bengali?.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim(), 
       source: 'Gemini Explore' 
     }));
@@ -192,7 +200,7 @@ export async function generateBulkWordData(words: string[]): Promise<Record<stri
   
   CRITICAL REQUIREMENTS:
   1. "word": The input word capitalized (first letter only, rest lowercase).
-  2. "family": List related forms (e.g. "happily (adv), happiness (n)").
+  2. "family": List related forms WITH POS in brackets (e.g. "happily (adv), happiness (n)").
   3. "usage_notes": Provide 1-2 creative tips using [TRAP], [MNEMONIC], [VIBE], or [TIP] tags.
   4. "etymology": Brief origin story.
   5. "bengali": Accurate Bengali meaning without phonetic brackets.
