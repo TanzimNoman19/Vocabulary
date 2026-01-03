@@ -35,7 +35,7 @@ const getAIClient = () => {
   return aiInstance;
 };
 
-export const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+export const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 
 export async function searchVocabulary(query: string): Promise<string[]> {
   const cleanQuery = query.trim();
@@ -150,9 +150,18 @@ export async function fetchExplorePack(level: VocabLevel = 'intermediate', count
   if (!navigator.onLine) throw new Error("Offline: Cannot explore new words.");
   const ai = getAIClient();
   const excludeInstruction = excludeWords.length > 0 ? `CRITICAL: Do not include any of these words in the output: ${excludeWords.slice(-200).join(', ')}.` : '';
-  const prompt = `Generate a pack of ${count} unique, interesting English vocabulary words suitable for a ${level} level learner.
+  const prompt = `Generate a pack of ${count} unique, sophisticated English vocabulary words suitable for a ${level} level learner.
   ${excludeInstruction}
-  Return a JSON array of objects. Format: Raw JSON array only.`;
+  
+  MANDATORY: For EVERY word, provide the COMPREHENSIVE details.
+  
+  Return a JSON array of objects with the following EXACT keys for each word:
+  "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
+  
+  Example requirement for "definition": Provide a clear, dictionary-grade English meaning.
+  Example requirement for "bengali": Provide an accurate Bangla meaning.
+  
+  Format: Raw JSON array only. No markdown formatting or extra text.`;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -160,8 +169,14 @@ export async function fetchExplorePack(level: VocabLevel = 'intermediate', count
       config: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }
     });
     const data = JSON.parse(response.text || '[]');
-    return data.map(item => ({ ...item, word: capitalize(item.word), bengali: item.bengali?.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim(), source: 'Gemini Explore' }));
+    return data.map(item => ({ 
+      ...item, 
+      word: capitalize(item.word), 
+      bengali: item.bengali?.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim(), 
+      source: 'Gemini Explore' 
+    }));
   } catch (error) {
+    console.error("Explore fetch failed", error);
     return [];
   }
 }
@@ -176,7 +191,7 @@ export async function generateBulkWordData(words: string[]): Promise<Record<stri
   "word", "pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty", "etymology", "usage_notes".
   
   CRITICAL REQUIREMENTS:
-  1. "word": The input word capitalized.
+  1. "word": The input word capitalized (first letter only, rest lowercase).
   2. "family": List related forms (e.g. "happily (adv), happiness (n)").
   3. "usage_notes": Provide 1-2 creative tips using [TRAP], [MNEMONIC], [VIBE], or [TIP] tags.
   4. "etymology": Brief origin story.

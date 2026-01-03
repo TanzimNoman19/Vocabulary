@@ -354,7 +354,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                     >
                         <div className="card-info">
                             <div className="card-top-row">
-                                <span className="word-title">{word}</span>
+                                <span className="word-title">{capitalize(word)}</span>
                                 <div className="card-indicators">
                                     {favoriteWords.includes(word) && <span className="fav-indicator">❤️</span>}
                                     <span className={`mastery-pill ${mastery.class}`}>{mastery.text}</span>
@@ -382,7 +382,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                     <div className="family-title-group">
                       <span className="family-icon">🌿</span>
                       <div className="cluster-title-stack">
-                        <span className="family-name">{group.savedMembers.join(', ')}</span>
+                        <span className="family-name">{group.savedMembers.map(m => capitalize(m)).join(', ')}</span>
                         <span className="cluster-meta">{group.savedMembers.length} MEMBERS</span>
                       </div>
                     </div>
@@ -417,7 +417,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 <h3 style={{ fontSize: '1.35rem', fontWeight: 900, letterSpacing: '-0.3px' }}>{selectedCluster.title}</h3>
                 <span className="subtitle">{clusterSimilarity === 2 ? 'Thematic Domain' : 'Semantic Cluster'}</span>
               </div>
-              <button onClick={() => setSelectedCluster(null)} className="close-button-cross"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+              <button onClick={() => setSelectedCluster(null)} className="close-button-cross"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
             </div>
             <div className="family-modal-content">
               <div className="common-thread-box">
@@ -430,7 +430,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                   return (
                     <div key={word} className="family-member-card saved" onClick={() => onNavigate(word, true)} style={{ borderLeft: `5px solid ${getMasteryColor(word)}` }}>
                       <div className="member-main-info">
-                        <span className="member-word">{word}</span>
+                        <span className="member-word">{capitalize(word)}</span>
                       </div>
                       <p className="member-snippet-oneline">{cache?.definition || 'Loading details...'}</p>
                     </div>
@@ -594,7 +594,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             box-shadow: 0 1px 4px rgba(0,0,0,0.01);
         }
         .modern-word-card.selected { background: var(--accent-secondary); border-color: var(--accent-primary); }
-        .word-title { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+        .word-title { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; text-transform: none; }
         .card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
         .card-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
         .card-indicators { display: flex; align-items: center; gap: 6px; }
@@ -625,7 +625,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .family-title-group { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
         .family-icon { font-size: 1.2rem; flex-shrink: 0; }
         .cluster-title-stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-        .family-name { font-weight: 800; font-size: 1rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+        .family-name { font-weight: 800; font-size: 1rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; text-transform: none; }
         .cluster-meta { font-size: 0.6rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
 
         .mastery-pill { font-size: 0.6rem; padding: 2px 8px; border-radius: 6px; font-weight: 800; text-transform: uppercase; }
@@ -640,7 +640,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .family-member-card { padding: 1rem; background: var(--bg-color); border-radius: 18px; display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border-color); transition: all 0.2s; }
         .family-member-card.saved { background: white; border: 1px solid var(--accent-primary); cursor: pointer; }
         .family-member-card.saved:active { transform: scale(0.98); }
-        .member-word { font-weight: 800; color: var(--text-primary); font-size: 1.1rem; }
+        .member-word { font-weight: 800; color: var(--text-primary); font-size: 1.1rem; text-transform: none; }
         .saved-badge { font-size: 0.6rem; background: var(--accent-primary); color: white; padding: 2px 6px; border-radius: 5px; font-weight: 900; letter-spacing: 0.5px; }
         .member-snippet-oneline { font-size: 0.85rem; color: var(--text-secondary); margin: 0; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 

@@ -337,7 +337,6 @@ const App: React.FC = () => {
               setCurrentTopic(newPackWords[0]);
           }
           setShouldStartFlipped(false);
-          handleCacheUpdate(newPackWords[0], pack.find(p => capitalize(p.word!) === newPackWords[0]) || pack[0]);
         }
       } catch (e) {
         alert("Failed to fetch explore pack. Try again later.");
@@ -474,13 +473,19 @@ const App: React.FC = () => {
             {!isOnline && <span className="offline-badge-pill">OFFLINE</span>}
             
             {activeTab === 'home' && (
+              <>
                <button 
                 className={`header-explore-btn ${isExploreMode ? 'active' : ''}`} 
                 onClick={() => handleToggleExplore()}
+                style={{ marginRight: '4px' }}
                >
                  <svg className="sparkle-icon-colorful" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4M3 5h4M21 17v4M19 19h4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                  <span>Explore</span>
                </button>
+               <button className="icon-btn header-import-btn" onClick={() => setIsBulkImportOpen(true)} title="Import Words">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                </button>
+              </>
             )}
 
             {activeTab === 'saved' && (
@@ -626,7 +631,6 @@ const App: React.FC = () => {
             font-weight: 800;
             border: 1.5px solid var(--border-color);
             transition: all 0.2s;
-            margin-right: 4px;
         }
         .header-explore-btn.active {
             background: var(--accent-primary);
