@@ -388,7 +388,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
               display: flex;
               justify-content: space-between;
               align-items: center;
-              padding: 1rem 1.5rem;
+              padding: 0.85rem 1.5rem; /* Matches refined index.css */
               border-top: 1px solid var(--border-color);
               background: var(--card-bg);
           }
