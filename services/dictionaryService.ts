@@ -53,15 +53,15 @@ const safeJsonParse = (text: string | undefined, fallback: any) => {
 const cardSchema = {
   type: Type.OBJECT,
   properties: {
-    pos: { type: Type.STRING },
-    definition: { type: Type.STRING },
-    bengali: { type: Type.STRING },
-    family: { type: Type.STRING },
-    context: { type: Type.STRING },
-    synonyms: { type: Type.STRING },
-    antonyms: { type: Type.STRING },
-    difficulty: { type: Type.STRING },
-    usage_notes: { type: Type.STRING }
+    pos: { type: Type.STRING, description: "Part of speech, e.g., 'noun', 'adjective (v)', etc." },
+    definition: { type: Type.STRING, description: "Clear academic definition in English." },
+    bengali: { type: Type.STRING, description: "Accurate Bengali meaning." },
+    family: { type: Type.STRING, description: "Comma separated related words with POS in brackets." },
+    context: { type: Type.STRING, description: "A high-level sentence showing usage." },
+    synonyms: { type: Type.STRING, description: "Comma separated synonyms." },
+    antonyms: { type: Type.STRING, description: "Comma separated antonyms." },
+    difficulty: { type: Type.STRING, description: "E.g., 'Medium', 'Advanced', 'SAT/GRE'." },
+    usage_notes: { type: Type.STRING, description: "Include [TRAP], [MNEMONIC], [VIBE], [TIP] tags with explanations." }
   },
   required: ["pos", "definition", "bengali", "family", "context", "synonyms", "antonyms", "difficulty"]
 };
@@ -101,15 +101,23 @@ export async function fetchWordData(word: string, definitionStyle: string = 'sta
   const ai = getAIClient();
   const styleInstruction = definitionStyle === 'concise' 
     ? 'Keep the definition brief (under 12 words).' 
-    : (definitionStyle === 'detailed' ? 'Provide a detailed, nuanced definition.' : 'Provide a standard, clear definition.');
+    : (definitionStyle === 'detailed' ? 'Provide a detailed, nuanced definition with etymology hints.' : 'Provide a standard, clear definition.');
   
-  const prompt = `Define the English word "${normalizedWord}" for a vocabulary card. 
+  const prompt = `Act as a world-class lexicographer and SAT/GRE tutor. 
+  Define the English word "${normalizedWord}" for a high-quality study flashcard. 
   ${styleInstruction} 
-  Rules: "family" must include POS in brackets (e.g. "happiness (n)"). "usage_notes" use [TRAP], [MNEMONIC], [VIBE], [TIP].`;
+  Specific Requirements:
+  - BENGALI: Provide a natural, precise translation without transliterating the English word.
+  - FAMILY: List 2-3 related forms with parts of speech, e.g., "happiness (n), happily (adv)".
+  - USAGE NOTES: Create ultra-helpful tips using these tags:
+    [TRAP]: Common confusion with similar words.
+    [MNEMONIC]: A memory aid or word root.
+    [VIBE]: The tone of the word (e.g., "Formal", "Pejorative", "Literary").
+    [TIP]: A quick usage rule.`;
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview', // Use Pro for best quality word analysis
       contents: prompt,
       config: { 
         responseMimeType: "application/json", 
@@ -120,8 +128,10 @@ export async function fetchWordData(word: string, definitionStyle: string = 'sta
     const data = safeJsonParse(response.text, {});
     if (!data.definition) return localFallback;
     
+    // Clean up Bengali if the model adds English brackets
     if (data.bengali) data.bengali = data.bengali.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim();
-    return { ...data, word: normalizedWord, source: 'Gemini AI' };
+    
+    return { ...data, word: normalizedWord, source: 'Gemini 3 Pro' };
   } catch (error: any) {
     if (retries > 0) return fetchWordData(normalizedWord, definitionStyle, retries - 1);
     return localFallback;
@@ -132,8 +142,10 @@ export async function generateSemanticClusters(words: string[], level: number = 
     if (!navigator.onLine || words.length === 0) return [];
     const ai = getAIClient();
     
-    const prompt = `Group these words by similarity (level ${level}/2): ${words.join(', ')}. 
-    Return a list of clusters with a title, member words, and explanation.`;
+    const prompt = `Group these vocabulary words into logical semantic clusters for better retention. 
+    Complexity Level: ${level}/2.
+    Words: ${words.join(', ')}. 
+    Return a list where each cluster has a clear title and an explanation of the shared concept.`;
 
     try {
         const response = await ai.models.generateContent({
@@ -167,22 +179,74 @@ export async function generateSemanticClusters(words: string[], level: number = 
     }
 }
 
+/**
+ * Enhanced Explore Strategy:
+ * Uses semantic discovery to find words the user likely doesn't know.
+ */
 export async function fetchExplorePack(level: VocabLevel = 'intermediate', count: number = 10, excludeWords: string[] = []): Promise<CardData[]> {
   if (!navigator.onLine) throw new Error("Offline");
+
+  const topicPools: Record<VocabLevel, string[]> = {
+    basic: ['everyday life', 'hobbies', 'family', 'simple emotions', 'places'],
+    intermediate: ['career', 'technology', 'society', 'current events', 'travel'],
+    gre: ['arcane adjectives', 'abstract nouns', 'logical fallacies', 'literary criticism', 'rare verbs'],
+    ielts: ['academic discourse', 'environmental issues', 'economic trends', 'educational methodology'],
+    expert: ['philosophical jargon', 'scientific nuance', 'obscure etymology', 'rhetorical devices']
+  };
+
+  const currentPool = topicPools[level] || topicPools.intermediate;
+  const randomTopic = currentPool[Math.floor(Math.random() * currentPool.length)];
+
+  try {
+    // Phase 1: Try finding words from external dictionary pool for variety
+    const datamuseRes = await fetch(`https://api.datamuse.com/words?topics=${encodeURIComponent(randomTopic)}&max=100`);
+    const datamuseData = await datamuseRes.json();
+    
+    const excludeSet = new Set(excludeWords.map(w => w.toLowerCase()));
+    const candidateWords = datamuseData
+      .map((item: any) => item.word)
+      .filter((word: string) => 
+        word.length > 3 && 
+        !word.includes(' ') && 
+        !excludeSet.has(word.toLowerCase())
+      );
+
+    // Phase 2: If we have candidates, let the AI define them. Otherwise, let AI invent the list.
+    if (candidateWords.length >= count) {
+      const selected = candidateWords.sort(() => 0.5 - Math.random()).slice(0, count);
+      return await generateBulkCardData(selected);
+    } else {
+      return await generateFallbackExplorePack(level, count, excludeWords);
+    }
+  } catch (e) {
+    return await generateFallbackExplorePack(level, count, excludeWords);
+  }
+}
+
+async function generateFallbackExplorePack(level: string, count: number, excludeWords: string[]): Promise<CardData[]> {
   const ai = getAIClient();
-  const excludeStr = excludeWords.length > 0 ? `Do NOT include: ${excludeWords.slice(-50).join(', ')}.` : '';
+  const excludeStr = excludeWords.length > 0 ? `Do NOT include any of these words: ${excludeWords.slice(-50).join(', ')}.` : '';
   
-  const prompt = `Generate ${count} interesting ${level} level vocabulary words. ${excludeStr}`;
+  const prompt = `Generate ${count} sophisticated ${level}-level English vocabulary words that are highly relevant for exams like SAT, GRE, or IELTS. 
+  ${excludeStr}
+  Ensure the words are distinct and academically useful. Provide full flashcard details for each.`;
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: { 
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
-          items: cardSchema
+          items: {
+              ...cardSchema,
+              properties: { 
+                ...cardSchema.properties, 
+                word: { type: Type.STRING, description: "The English word itself." } 
+              },
+              required: [...cardSchema.required, "word"]
+          }
         },
         thinkingConfig: { thinkingBudget: 0 } 
       }
@@ -191,18 +255,31 @@ export async function fetchExplorePack(level: VocabLevel = 'intermediate', count
     return data.map((item: any) => ({ 
       ...item, 
       word: capitalize(item.word || ''), 
-      bengali: item.bengali?.replace(/\s*\([^)]*[a-zA-Z][^)]*\)/g, '').trim(), 
-      source: 'Gemini Explore' 
+      bengali: item.bengali?.replace(/\s*\([^)]*\)/g, '').trim(), 
+      source: 'Gemini Pro Discovery' 
     }));
   } catch (error) {
+    console.error("Explore fallback failed", error);
     return [];
   }
 }
 
 export async function generateBulkWordData(words: string[]): Promise<Record<string, CardData>> {
-  if (!navigator.onLine) throw new Error("Offline");
+  const cards = await generateBulkCardData(words);
+  const finalCache: Record<string, CardData> = {};
+  cards.forEach((card) => {
+    if (card.word) finalCache[card.word] = card;
+  });
+  return finalCache;
+}
+
+export async function generateBulkCardData(words: string[]): Promise<CardData[]> {
+  if (!navigator.onLine || words.length === 0) return [];
   const ai = getAIClient();
-  const prompt = `Generate full card data for these words: ${words.join(', ')}.`;
+  
+  const prompt = `Act as a senior lexicographer. Create professional vocabulary flashcards for the following words: ${words.join(', ')}.
+  For each word, ensure precise definitions and high-quality academic context. 
+  Provide Bengali translations that accurately capture the nuance.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -222,15 +299,14 @@ export async function generateBulkWordData(words: string[]): Promise<Record<stri
       }
     });
     const results = safeJsonParse(response.text, []);
-    const finalCache: Record<string, CardData> = {};
-    results.forEach((item: any) => {
-      if (item.word) {
-        const w = capitalize(item.word);
-        finalCache[w] = { ...item, word: w, source: 'Gemini Bulk AI' };
-      }
-    });
-    return finalCache;
+    return results.map((item: any) => ({
+      ...item,
+      word: capitalize(item.word || ''),
+      bengali: item.bengali?.replace(/\s*\([^)]*\)/g, '').trim(),
+      source: 'Gemini AI'
+    }));
   } catch (error) {
+    console.error("Bulk generation failed", error);
     throw error;
   }
 }
@@ -240,7 +316,7 @@ export async function fetchContextSentence(word: string): Promise<string> {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Sentence for "${word}":`,
+      contents: `Generate a sophisticated, academic example sentence for the word "${word}" that clearly illustrates its meaning:`,
       config: { thinkingConfig: { thinkingBudget: 0 } }
     });
     return response.text?.trim() || `Example using ${word}.`;
@@ -251,7 +327,7 @@ export async function fetchContextSentence(word: string): Promise<string> {
 
 export async function getShortDefinition(word: string): Promise<string> {
   try {
-    const data = await fetchWordData(word);
+    const data = await fetchWordData(word, 'concise');
     return `(${data.pos}) ${data.definition}\n${data.bengali}`;
   } catch (e) {
     return "Definition unavailable.";

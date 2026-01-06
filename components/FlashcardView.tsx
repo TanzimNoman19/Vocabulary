@@ -39,6 +39,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     pos: '...', definition: '', bengali: '', family: '', context: '', synonyms: '', antonyms: '', difficulty: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const activeTopic = useRef(topic);
   const [tooltip, setTooltip] = useState<{ word: string, text: string, pos?: string, x: number, y: number } | null>(null);
@@ -82,6 +83,21 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
         setIsLoading(false);
         setErrorMsg("Failed to fetch word details. Check your connection.");
       }
+    }
+  };
+
+  const handleRegenerate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOnline || isRegenerating) return;
+    setIsRegenerating(true);
+    try {
+      const result = await fetchWordData(topic);
+      setData(result);
+      onCacheUpdate(topic, result);
+    } catch (e) {
+      console.error("Regeneration failed", e);
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -249,7 +265,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                     <div className="section-label">WORD FAMILY</div>
                     <div className="chip-container">
                         {familyList.map(f => {
-                            // Extract word only for navigation (strips brackets like (v), (n))
                             const clean = f.replace(/\s*\([^)]*\)/g, '').trim();
                             return (
                                 <span 
@@ -295,10 +310,15 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
            </div>
 
            <div className="card-back-footer">
-               <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>
-                 Source: {data.source || 'Local Cache'}
-               </span>
-               <button className="action-btn-back" onClick={(e) => { e.stopPropagation(); onUpdateSRS(topic, 'dont_know'); }}>
+               <button 
+                className={`regen-btn-footer ${isRegenerating ? 'spinning' : ''}`} 
+                onClick={handleRegenerate}
+                title="Regenerate with AI"
+                disabled={isRegenerating || !isOnline}
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+               </button>
+               <button className="action-btn-back" onClick={(e) => { e.stopPropagation(); setIsFlipped(false); onUpdateSRS(topic, 'dont_know'); }}>
                   Review Again
                </button>
            </div>
@@ -307,7 +327,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
       
       <div className="external-actions">
         {!isExploreMode ? (
-            /* Classic review layout */
             <>
                 <button className="skip-action-btn know-btn" onClick={() => onUpdateSRS(topic, 'know')}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -319,7 +338,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                 </button>
             </>
         ) : (
-            /* New 3-button Explore layout */
             <>
                 <button 
                     className="nav-icon-btn" 
@@ -374,11 +392,27 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
               border-top: 1px solid var(--border-color);
               background: var(--card-bg);
           }
+          .regen-btn-footer {
+              background: var(--accent-secondary);
+              color: var(--accent-primary);
+              border: 1px solid var(--border-color);
+              border-radius: 12px;
+              width: 44px;
+              height: 44px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: transform 0.2s, background 0.2s;
+          }
+          .regen-btn-footer:active { transform: scale(0.9); }
+          .regen-btn-footer.spinning svg { animation: spin 1s linear infinite; }
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
           .action-btn-back {
-              padding: 8px 14px;
-              border-radius: 10px;
+              padding: 10px 18px;
+              border-radius: 12px;
               font-weight: 700;
-              font-size: 0.75rem;
+              font-size: 0.85rem;
               background: var(--accent-secondary);
               color: var(--accent-primary);
               border: 1px solid var(--border-color);
