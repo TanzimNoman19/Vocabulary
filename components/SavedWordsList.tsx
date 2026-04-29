@@ -7,20 +7,23 @@ import React, { useState, useMemo, useRef } from 'react';
 import { SRSItem } from '../services/srsService';
 import { CardData, capitalize, generateSemanticClusters } from '../services/dictionaryService';
 import { SemanticCluster } from '../App';
-import EditWordModal from './EditWordModal';
 
 interface SavedWordsListProps {
   savedWords: string[];
   favoriteWords: string[];
+  archivedWords: string[];
   trashedWords: string[];
   srsData: Record<string, SRSItem>;
   cardCache: Record<string, CardData>;
   onNavigate: (word: string, initialFlipped?: boolean) => void;
   onDeleteMultiple: (words: string[]) => void;
+  onArchiveMultiple: (words: string[]) => void;
+  onRestoreFromArchive: (words: string[]) => void;
   onRestoreFromTrash: (words: string[]) => void;
   onPermanentDelete: (words: string[]) => void;
   onOpenImport: () => void;
   onUpdateWordData: (oldWord: string, newWord: string, newData: CardData) => void;
+  onEditWords: (words: string[]) => void;
   semanticClusters: SemanticCluster[];
   setSemanticClusters: (clusters: SemanticCluster[]) => void;
   clusterSimilarity: number;
@@ -28,7 +31,7 @@ interface SavedWordsListProps {
   isOnline: boolean;
 }
 
-type SortType = 'alpha' | 'time';
+type SortType = 'alpha' | 'time' | 'smart';
 type SortOrder = 'asc' | 'desc';
 type MasteryFilter = 'all' | 'new' | 'learning' | 'mastered';
 type ViewType = 'list' | 'family' | 'synonym';
@@ -45,7 +48,7 @@ interface FamilyGroup {
 }
 
 const SavedWordsList: React.FC<SavedWordsListProps> = ({ 
-    savedWords, favoriteWords, trashedWords, srsData, cardCache, onNavigate, onDeleteMultiple, onRestoreFromTrash, onPermanentDelete, onOpenImport, onUpdateWordData,
+    savedWords, favoriteWords, archivedWords, trashedWords, srsData, cardCache, onNavigate, onDeleteMultiple, onArchiveMultiple, onRestoreFromArchive, onRestoreFromTrash, onPermanentDelete, onOpenImport, onUpdateWordData, onEditWords,
     semanticClusters, setSemanticClusters, clusterSimilarity, setClusterSimilarity, isOnline
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
@@ -59,8 +62,8 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
   
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
+  const [expandedWords, setExpandedWords] = useState<Set<string>>(new Set());
   const longPressTimer = useRef<number | null>(null);
-  const [editingWord, setEditingWord] = useState<string | null>(null);
 
   const baseList = activeTab === 'all' ? savedWords : favoriteWords;
 
@@ -88,10 +91,36 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         if (sortBy === 'alpha') {
             const res = a.localeCompare(b);
             return sortOrder === 'asc' ? res : -res;
-        } else {
+        } else if (sortBy === 'time') {
+            // Sort by addition time (index in savedWords)
+            // Lower index is older, higher index is newer
             const idxA = savedWords.indexOf(a);
             const idxB = savedWords.indexOf(b);
-            return sortOrder === 'asc' ? idxB - idxA : idxA - idxB;
+            return sortOrder === 'asc' ? idxA - idxB : idxB - idxA;
+        } else {
+            // Smart Sort: Prioritize recently added/interacted, then due words, then mastery level
+            const itemA = srsData[a];
+            const itemB = srsData[b];
+            
+            const timeA = itemA?.lastInteractedAt || (Date.now() - (savedWords.indexOf(a) * 1000));
+            const timeB = itemB?.lastInteractedAt || (Date.now() - (savedWords.indexOf(b) * 1000));
+            
+            // Primary priority: Recency (if timestamps differ significantly, or by default)
+            if (Math.abs(timeA - timeB) > 100) { // More than 100ms difference
+                const timeRes = timeB - timeA;
+                return sortOrder === 'asc' ? -timeRes : timeRes;
+            }
+
+            const now = Date.now();
+            const isDueA = !itemA || itemA.nextReview <= now ? 1 : 0;
+            const isDueB = !itemB || itemB.nextReview <= now ? 1 : 0;
+            
+            if (isDueA !== isDueB) return isDueB - isDueA;
+            
+            // Lower mastery first (needs more practice)
+            const masteryA = itemA?.masteryLevel || 0;
+            const masteryB = itemB?.masteryLevel || 0;
+            return masteryA - masteryB;
         }
     });
     return list;
@@ -243,6 +272,11 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     if (selectionMode) { toggleSelection(word); } else { onNavigate(word, true); }
   };
 
+  const toggleExpand = (word: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedWords(prev => (prev.has(word) ? new Set() : new Set([word])));
+  };
+
   const startLongPress = (word: string, e: React.PointerEvent) => {
     if (selectionMode || viewType !== 'list') return;
     longPressTimer.current = window.setTimeout(() => {
@@ -274,8 +308,30 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                 }}>
                     {selectedWords.size === filteredAndSortedList.length ? 'NONE' : 'ALL'}
                 </button>
+                <button 
+                  className="icon-btn-selection edit-circle" 
+                  onClick={() => { 
+                    onEditWords(Array.from(selectedWords));
+                    setSelectionMode(false); 
+                    setSelectedWords(new Set()); 
+                  }}
+                  title="Edit Selected"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
                 <button className="icon-btn-selection trash-circle" onClick={() => { if(confirm(`Delete ${selectedWords.size} words?`)) { onDeleteMultiple(Array.from(selectedWords)); setSelectionMode(false); setSelectedWords(new Set()); } }}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+                <button 
+                  className="icon-btn-selection archive-circle" 
+                  onClick={() => { 
+                    onArchiveMultiple(Array.from(selectedWords));
+                    setSelectionMode(false); 
+                    setSelectedWords(new Set()); 
+                  }}
+                  title="Archive"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
                 </button>
               </div>
           </div>
@@ -287,17 +343,20 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                   LIBRARY ({savedWords.length})
               </button>
               <button onClick={() => setActiveTab('favorites')} className={activeTab === 'favorites' ? 'active fav' : ''}>
-                  FAVORITES ({favoriteWords.length})
+                  FAVOURITE ({favoriteWords.length})
               </button>
           </div>
       </div>
 
       <div className="filter-sort-bar">
           <div className="sort-toggles">
-              <button className={sortBy === 'time' ? 'active' : ''} onClick={() => { if (sortBy === 'time') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else setSortBy('time'); }}>
+              <button className={sortBy === 'smart' ? 'active' : ''} onClick={() => { if (sortBy === 'smart') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('smart'); setSortOrder('desc'); } }}>
+                  SMART {sortBy === 'smart' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </button>
+              <button className={sortBy === 'time' ? 'active' : ''} onClick={() => { if (sortBy === 'time') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('time'); setSortOrder('desc'); } }}>
                   RECENT {sortBy === 'time' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
-              <button className={sortBy === 'alpha' ? 'active' : ''} onClick={() => { if (sortBy === 'alpha') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else setSortBy('alpha'); }}>
+              <button className={sortBy === 'alpha' ? 'active' : ''} onClick={() => { if (sortBy === 'alpha') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('alpha'); setSortOrder('asc'); } }}>
                   A-Z {sortBy === 'alpha' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
               
@@ -343,10 +402,11 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
               filteredAndSortedList.map(word => {
                   const mastery = getMasteryLabel(word);
                   const masteryLevel = srsData[word]?.masteryLevel || 0;
+                  const isExpanded = expandedWords.has(word);
                   return (
                     <div 
                         key={word} 
-                        className={`modern-word-card ${selectedWords.has(word) ? 'selected' : ''}`} 
+                        className={`modern-word-card ${selectedWords.has(word) ? 'selected' : ''} ${isExpanded ? 'expanded' : ''}`} 
                         onClick={() => handleItemClick(word)} 
                         onPointerDown={(e) => startLongPress(word, e)}
                         onPointerUp={cancelLongPress}
@@ -358,19 +418,19 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
                                 <div className="card-indicators">
                                     {favoriteWords.includes(word) && <span className="fav-indicator">❤️</span>}
                                     <span className={`mastery-pill ${mastery.class}`}>{mastery.text}</span>
-                                    <button className="edit-mini-btn" onClick={(e) => { e.stopPropagation(); setEditingWord(word); }}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                    </button>
                                 </div>
                             </div>
                             <p className="word-snippet">{cardCache[word]?.definition || 'No definition cached...'}</p>
+                            
                             <div className="mastery-progress-dashes">
                                 {[...Array(5)].map((_, i) => (
                                     <div key={i} className={`dash ${i < masteryLevel ? 'filled' : ''}`} />
                                 ))}
                             </div>
                         </div>
-                        <div className="arrow-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+                        <button className={`expand-action-btn ${isExpanded ? 'active' : ''}`} onClick={(e) => toggleExpand(word, e)}>
+                           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
                     </div>
                   );
               })
@@ -480,7 +540,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         </div>
       )}
 
-      {editingWord && <EditWordModal word={editingWord} initialData={cardCache[editingWord]} onClose={() => setEditingWord(null)} onSave={onUpdateWordData} />}
+      {/* Edit modal is now handled by App.tsx level */}
 
       <style>{`
         /* SELECTION BAR STYLES */
@@ -531,6 +591,22 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             border-radius: 50%;
             width: 40px;
             height: 40px;
+        }
+
+        .edit-circle {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            width: 40px;
+            height: 40px;
+            color: white;
+        }
+
+        .archive-circle {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            width: 40px;
+            height: 40px;
+            color: white;
         }
 
         .selection-actions-group {
@@ -586,33 +662,45 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             border-radius: 20px; 
             padding: 0.85rem 1.15rem; 
             display: flex; 
-            align-items: center; 
-            gap: 0.75rem; 
+            align-items: flex-start; 
+            gap: 1rem; 
             border: 1px solid var(--border-color); 
-            transition: all 0.2s; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             cursor: pointer;
             box-shadow: 0 1px 4px rgba(0,0,0,0.01);
+            position: relative;
+            overflow: hidden;
+        }
+        .modern-word-card.expanded {
+            padding-bottom: 1.25rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            background: #fff;
         }
         .modern-word-card.selected { background: var(--accent-secondary); border-color: var(--accent-primary); }
         .word-title { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; text-transform: none; }
-        .card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-        .card-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+        .card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+        .card-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
         .card-indicators { display: flex; align-items: center; gap: 6px; }
-        .edit-mini-btn { padding: 3px; border-radius: 5px; color: var(--accent-primary); background: var(--accent-secondary); transition: 0.1s; display: flex; }
-        .edit-mini-btn:active { transform: scale(0.9); }
         .word-snippet { 
             font-size: 0.85rem; 
-            color: var(--text-secondary); 
-            margin: 0 0 6px 0; 
-            line-height: 1.3; 
+            color: var(--text-secondary);
+            margin: 0 0 8px 0; 
+            line-height: 1.4; 
             display: -webkit-box; 
             -webkit-line-clamp: 1; 
             -webkit-box-orient: vertical; 
             overflow: hidden; 
             font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .modern-word-card.expanded .word-snippet {
+            -webkit-line-clamp: unset;
+            display: block;
+            color: var(--text-primary);
+            font-weight: 600;
         }
 
-        .mastery-progress-dashes { display: flex; gap: 4px; }
+        .mastery-progress-dashes { display: flex; gap: 4px; margin-top: 4px; }
         .mastery-progress-dashes .dash { width: 14px; height: 2.5px; border-radius: 4px; background: var(--border-color); }
         .mastery-progress-dashes .dash.filled { background: var(--accent-primary); opacity: 0.3; }
         .mastery-pill.new .dash.filled { background: var(--accent-primary); }
@@ -644,7 +732,33 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
         .saved-badge { font-size: 0.6rem; background: var(--accent-primary); color: white; padding: 2px 6px; border-radius: 5px; font-weight: 900; letter-spacing: 0.5px; }
         .member-snippet-oneline { font-size: 0.85rem; color: var(--text-secondary); margin: 0; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 
-        .arrow-icon { color: var(--text-muted); opacity: 0.5; padding-left: 4px; }
+        .expand-action-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            background: var(--accent-secondary);
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+        .expand-action-btn:hover {
+            background: var(--border-color);
+            color: var(--accent-primary);
+        }
+        .expand-action-btn.active {
+            transform: rotate(90deg);
+            background: var(--accent-primary);
+            color: white;
+        }
+        .expand-action-btn svg {
+            transition: transform 0.3s ease;
+        }
 
         /* MODAL FIX: Fixed header and scrollable content */
         .family-modal {

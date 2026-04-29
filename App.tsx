@@ -14,6 +14,8 @@ import ProfileView from './components/ProfileView';
 import BulkImportModal from './components/BulkImportModal';
 import CardSettingsModal from './components/CardSettingsModal';
 import TrashModal from './components/TrashModal';
+import ArchiveModal from './components/ArchiveModal';
+import EditWordModal from './components/EditWordModal';
 
 type Tab = 'home' | 'saved' | 'profile';
 
@@ -54,6 +56,7 @@ const App: React.FC = () => {
   
   const [savedWords, setSavedWords] = useState<string[]>(() => JSON.parse(localStorage.getItem('savedWords') || '[]'));
   const [favoriteWords, setFavoriteWords] = useState<string[]>(() => JSON.parse(localStorage.getItem('favoriteWords') || '[]'));
+  const [archivedWords, setArchivedWords] = useState<string[]>(() => JSON.parse(localStorage.getItem('archivedWords') || '[]'));
   const [trashedWords, setTrashedWords] = useState<string[]>(() => JSON.parse(localStorage.getItem('trashedWords') || '[]'));
   const [srsData, setSrsData] = useState<Record<string, SRSItem>>(() => JSON.parse(localStorage.getItem('srsData') || '{}'));
   const [cardCache, setCardCache] = useState<Record<string, CardData>>(() => JSON.parse(localStorage.getItem('cardCache') || '{}'));
@@ -88,6 +91,7 @@ const App: React.FC = () => {
 
     const newSaved = sanitizeList(savedWords);
     const newFavs = sanitizeList(favoriteWords);
+    const newArchived = sanitizeList(archivedWords);
     const newTrash = sanitizeList(trashedWords);
     const newSRS = sanitizeObjectKeys(srsData);
     const newCache = sanitizeObjectKeys(cardCache);
@@ -95,10 +99,11 @@ const App: React.FC = () => {
     if (hasChanged) {
       setSavedWords(newSaved);
       setFavoriteWords(newFavs);
+      setArchivedWords(newArchived);
       setTrashedWords(newTrash);
       setSrsData(newSRS as Record<string, SRSItem>);
       setCardCache(newCache as Record<string, CardData>);
-      if (currentTopic && currentTopic !== "__EMPTY_FALLBACK__") {
+      if (currentTopic && currentTopic.toUpperCase() !== "__EMPTY_FALLBACK__") {
         setCurrentTopic(capitalize(currentTopic));
       }
     }
@@ -114,6 +119,9 @@ const App: React.FC = () => {
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [editingQueue, setEditingQueue] = useState<string[]>([]);
+  const editingWord = editingQueue.length > 0 ? editingQueue[0] : null;
   const [user, setUser] = useState<any>(null);
   const [shouldStartFlipped, setShouldStartFlipped] = useState(false);
 
@@ -160,6 +168,7 @@ const App: React.FC = () => {
     if (cloudData) {
         setSavedWords((cloudData.savedWords || []).map(capitalize));
         setFavoriteWords((cloudData.favoriteWords || []).map(capitalize));
+        setArchivedWords((cloudData.archivedWords || []).map(capitalize));
         setTrashedWords((cloudData.trashedWords || []).map(capitalize));
         setSemanticClusters(cloudData.semanticClusters || []);
         if (cloudData.clusterSimilarity !== undefined) setClusterSimilarity(cloudData.clusterSimilarity);
@@ -197,6 +206,7 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('savedWords', JSON.stringify(savedWords));
     localStorage.setItem('favoriteWords', JSON.stringify(favoriteWords));
+    localStorage.setItem('archivedWords', JSON.stringify(archivedWords));
     localStorage.setItem('trashedWords', JSON.stringify(trashedWords));
     localStorage.setItem('srsData', JSON.stringify(srsData));
     localStorage.setItem('cardCache', JSON.stringify(cardCache));
@@ -206,8 +216,8 @@ const App: React.FC = () => {
     localStorage.setItem('semanticClusters', JSON.stringify(semanticClusters));
     localStorage.setItem('clusterSimilarity', String(clusterSimilarity));
 
-    if (user && isOnline) saveUserData(user.id, { savedWords, favoriteWords, trashedWords, srsData, cardCache, semanticClusters, clusterSimilarity });
-  }, [savedWords, favoriteWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings, explorePackSize, definitionStyle, semanticClusters, clusterSimilarity]);
+    if (user && isOnline) saveUserData(user.id, { savedWords, favoriteWords, archivedWords, trashedWords, srsData, cardCache, semanticClusters, clusterSimilarity });
+  }, [savedWords, favoriteWords, archivedWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings, explorePackSize, definitionStyle, semanticClusters, clusterSimilarity]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -283,7 +293,7 @@ const App: React.FC = () => {
     if (!data.definition || data.definition.includes("pending download")) return;
     const capitalizedWord = capitalize(word);
     setCardCache(prev => ({ ...prev, [capitalizedWord]: { ...data, word: capitalizedWord } }));
-    if (capitalizedWord !== "__EMPTY_FALLBACK__" && !savedWords.includes(capitalizedWord)) {
+    if (capitalizedWord.toUpperCase() !== "__EMPTY_FALLBACK__" && !savedWords.includes(capitalizedWord)) {
       setSavedWords(prev => [capitalizedWord, ...prev]);
       if (!srsData[capitalizedWord]) setSrsData(prev => ({ ...prev, [capitalizedWord]: initializeSRSItem(capitalizedWord) }));
     }
@@ -409,8 +419,25 @@ const App: React.FC = () => {
       const wordSet = new Set(capWords.map(w => w.toLowerCase()));
       setSavedWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
       setFavoriteWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
+      setArchivedWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
       setTrashedWords(prev => [...new Set([...capWords, ...prev])]);
       if (wordSet.has(currentTopic.toLowerCase())) handleRandom();
+  };
+
+  const handleMoveToArchive = (words: string[]) => {
+    const capWords = words.map(capitalize);
+    const wordSet = new Set(capWords.map(w => w.toLowerCase()));
+    setSavedWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
+    setFavoriteWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
+    setArchivedWords(prev => [...new Set([...capWords, ...prev])]);
+    if (wordSet.has(currentTopic.toLowerCase())) handleRandom();
+  };
+
+  const handleRestoreFromArchive = (words: string[]) => {
+    const capWords = words.map(capitalize);
+    const wordSet = new Set(capWords.map(w => w.toLowerCase()));
+    setArchivedWords(prev => prev.filter(w => !wordSet.has(w.toLowerCase())));
+    setSavedWords(prev => [...new Set([...capWords, ...prev])]);
   };
 
   const handleRestoreFromTrash = (words: string[]) => {
@@ -494,6 +521,9 @@ const App: React.FC = () => {
 
             {activeTab === 'saved' && (
               <div className="header-dynamic-actions" style={{ display: 'flex', gap: '8px' }}>
+                <button className={`icon-btn header-archive-btn ${archivedWords.length > 0 ? 'not-empty' : ''}`} onClick={() => setIsArchiveOpen(true)} title="View Archive">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+                </button>
                 <button className={`icon-btn header-trash-btn ${trashedWords.length > 0 ? 'not-empty' : ''}`} onClick={() => setIsTrashOpen(true)} title="View Trash">
                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
@@ -518,7 +548,8 @@ const App: React.FC = () => {
             </div>
         )}
         
-        {activeTab === 'home' && (
+        {/* All tabs are kept mounted to preserve scroll position and state */}
+        <div className={`tab-view ${activeTab === 'home' ? 'active' : ''}`}>
             <FlashcardView 
               topic={capitalize(currentTopic)} 
               initialFlipped={shouldStartFlipped} 
@@ -527,38 +558,44 @@ const App: React.FC = () => {
               srsData={srsData} 
               cardCache={cardCache} 
               onUpdateSRS={handleSRSUpdate} 
-              onToggleSave={handleToggleSave} 
               onToggleFavorite={handleToggleFavorite} 
               onNavigate={handleNavigate} 
               onCacheUpdate={handleCacheUpdate} 
               onOpenImport={() => setIsBulkImportOpen(true)} 
+              onEditWord={(word) => setEditingQueue([word])}
               isOnline={isOnline} 
               visibilitySettings={visibilitySettings}
               isExploreMode={isExploreMode}
               exploreProgress={isExploreMode ? { current: exploreIndex + 1, total: explorePack.length } : undefined}
             />
-        )}
-        {activeTab === 'saved' && (
+        </div>
+        <div className={`tab-view ${activeTab === 'saved' ? 'active' : ''}`}>
             <SavedWordsList 
                 savedWords={savedWords} 
                 favoriteWords={favoriteWords} 
+                archivedWords={archivedWords}
                 trashedWords={trashedWords} 
                 srsData={srsData} 
                 cardCache={cardCache} 
                 onNavigate={handleNavigate} 
                 onDeleteMultiple={handleMoveToTrash} 
+                onArchiveMultiple={handleMoveToArchive}
+                onRestoreFromArchive={handleRestoreFromArchive}
                 onRestoreFromTrash={handleRestoreFromTrash} 
                 onPermanentDelete={handlePermanentDelete} 
                 onOpenImport={() => setIsBulkImportOpen(true)}
                 onUpdateWordData={handleUpdateWordData}
+                onEditWords={(words) => setEditingQueue(words)}
                 semanticClusters={semanticClusters}
                 setSemanticClusters={setSemanticClusters}
                 clusterSimilarity={clusterSimilarity}
                 setClusterSimilarity={setClusterSimilarity}
                 isOnline={isOnline}
             />
-        )}
-        {activeTab === 'profile' && <ProfileView user={user} savedCount={savedWords.length} cachedCount={cachedCount} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} isOnline={isOnline} onResetSRS={handleResetSRS} />}
+        </div>
+        <div className={`tab-view ${activeTab === 'profile' ? 'active' : ''}`}>
+            <ProfileView user={user} savedCount={savedWords.length} cachedCount={cachedCount} srsData={srsData} onSignOut={() => supabase.auth.signOut()} onLogin={() => {}} isOnline={isOnline} onResetSRS={handleResetSRS} />
+        </div>
       </main>
 
       <div className="bottom-nav-container">
@@ -601,6 +638,29 @@ const App: React.FC = () => {
             onClose={() => setIsTrashOpen(false)} 
             onRestore={handleRestoreFromTrash} 
             onPermanentDelete={handlePermanentDelete}
+          />
+      )}
+
+      {isArchiveOpen && (
+          <ArchiveModal 
+            archivedWords={archivedWords} 
+            cardCache={cardCache} 
+            onClose={() => setIsArchiveOpen(false)} 
+            onRestore={handleRestoreFromArchive} 
+            onDelete={handleMoveToTrash}
+          />
+      )}
+
+      {editingWord && (
+          <EditWordModal 
+            key={editingWord}
+            word={editingWord} 
+            initialData={cardCache[editingWord] || {}} 
+            onClose={() => setEditingQueue(prev => prev.slice(1))} 
+            onSave={(oldW, newW, newData) => {
+               handleUpdateWordData(oldW, newW, newData);
+               setEditingQueue(prev => prev.slice(1));
+            }} 
           />
       )}
 
@@ -651,10 +711,21 @@ const App: React.FC = () => {
         .icon-btn:active, .header-explore-btn:active {
           transform: scale(0.92);
         }
+        .tab-view {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        .tab-view.active {
+            display: flex;
+        }
         .header-trash-btn.not-empty {
           position: relative;
         }
-        .header-trash-btn.not-empty::after {
+        .header-trash-btn.not-empty::after, .header-archive-btn.not-empty::after {
           content: '';
           position: absolute;
           top: 6px;
@@ -664,6 +735,9 @@ const App: React.FC = () => {
           background: var(--danger-color);
           border-radius: 50%;
           border: 2.5px solid var(--bg-color);
+        }
+        .header-archive-btn.not-empty::after {
+          background: var(--accent-primary);
         }
         .sync-spinner {
           width: 16px;

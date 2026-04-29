@@ -18,7 +18,6 @@ interface FlashcardViewProps {
   srsData: Record<string, SRSItem>;
   cardCache: Record<string, CardData>;
   onUpdateSRS: (word: string, grade: Grade) => void;
-  onToggleSave: (word: string) => void;
   onToggleFavorite: (word: string) => void;
   onNavigate: (word: string, initialFlipped?: boolean) => void;
   onNavigateSilent?: (word: string) => void;
@@ -31,7 +30,7 @@ interface FlashcardViewProps {
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({ 
-    topic, initialFlipped = false, savedWords, favoriteWords, srsData, cardCache, onUpdateSRS, onToggleSave, onToggleFavorite, onNavigate, onCacheUpdate, onOpenImport, isOnline, visibilitySettings,
+    topic, initialFlipped = false, savedWords, favoriteWords, srsData, cardCache, onUpdateSRS, onToggleFavorite, onNavigate, onCacheUpdate, onOpenImport, isOnline, visibilitySettings,
     isExploreMode = false, exploreProgress
 }) => {
   const [isFlipped, setIsFlipped] = useState(initialFlipped);
@@ -155,7 +154,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
     );
   };
 
-  if (topic === "__EMPTY_FALLBACK__") {
+  if (topic.toUpperCase() === "__EMPTY_FALLBACK__") {
       return (
           <div className="flashcard-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
               <div className="card-face card-front" style={{ position: 'relative', height: 'auto', minHeight: '350px', display: 'flex', flexDirection: 'column', padding: '2rem' }}>

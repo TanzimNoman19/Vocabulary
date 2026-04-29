@@ -9,6 +9,7 @@ export interface SRSItem {
   masteryLevel: number; // 0 to 5
   nextReview: number; // Timestamp
   reviewCount: number; // Number of times reviewed
+  lastInteractedAt?: number; // Latest timestamp of addition or review
 }
 
 export type Grade = 'know' | 'dont_know';
@@ -29,6 +30,7 @@ export const initializeSRSItem = (word: string): SRSItem => ({
   masteryLevel: 0,
   nextReview: Date.now(), // Due immediately
   reviewCount: 0,
+  lastInteractedAt: Date.now(),
 });
 
 /**
@@ -56,6 +58,7 @@ export const calculateSRS = (item: SRSItem, grade: Grade): SRSItem => {
     masteryLevel,
     reviewCount,
     nextReview: Date.now() + (daysToAdd * DAY_IN_MS),
+    lastInteractedAt: Date.now(),
   };
 };
 

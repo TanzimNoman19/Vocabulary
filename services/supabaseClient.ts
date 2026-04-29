@@ -22,6 +22,10 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'pkce' 
+  },
+  global: {
+    // Better binding to prevent 'Illegal invocation' and ensure it uses the standard window fetch
+    fetch: (...args) => window.fetch.bind(window)(...args)
   }
 });
 

@@ -131,67 +131,87 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, cachedCount
         <style>{`
           .profile-view {
               padding-top: 0.5rem;
+              max-width: 600px;
+              margin: 0 auto;
           }
           .profile-header-bar {
               display: flex;
               justify-content: space-between;
               align-items: center;
               margin-bottom: 1.5rem;
+              padding: 0 4px;
           }
           .view-title { margin: 0; font-size: 1.5rem; font-weight: 800; color: var(--accent-primary); letter-spacing: -0.5px; }
           .sync-status-badge {
-              font-size: 0.65rem;
+              font-size: 0.6rem;
               font-weight: 800;
               color: var(--success-color);
               background: rgba(0, 200, 83, 0.08);
-              padding: 5px 12px;
+              padding: 6px 12px;
               border-radius: 20px;
-              letter-spacing: 0.5px;
+              letter-spacing: 0.8px;
+              text-transform: uppercase;
           }
 
           .offline-alert {
               margin-bottom: 1.5rem;
-              padding: 12px 16px;
+              padding: 14px 18px;
               background: rgba(255, 59, 48, 0.08);
               color: var(--danger-color);
-              border-radius: 16px;
+              border-radius: 20px;
               font-size: 0.85rem;
               font-weight: 600;
               border: 1px solid rgba(255, 59, 48, 0.15);
               display: flex;
               gap: 12px;
               align-items: center;
+              line-height: 1.4;
           }
-          .alert-icon { font-size: 1.2rem; }
+          .alert-icon { font-size: 1.3rem; }
 
           .guest-cta-card {
               background: var(--accent-primary);
-              border-radius: 24px;
-              padding: 1.5rem;
+              border-radius: 28px;
+              padding: 1.75rem;
               color: white;
               margin-bottom: 2rem;
               box-shadow: 0 12px 30px rgba(88, 86, 214, 0.25);
               display: flex;
               flex-direction: column;
-              gap: 1.2rem;
+              gap: 1.5rem;
+              position: relative;
+              overflow: hidden;
           }
-          .cta-content h3 { margin: 0; font-size: 1.3rem; font-weight: 800; }
-          .cta-content p { margin: 8px 0 0 0; font-size: 0.9rem; opacity: 0.9; line-height: 1.4; }
+          .guest-cta-card::before {
+              content: '';
+              position: absolute;
+              top: -50px;
+              right: -50px;
+              width: 150px;
+              height: 150px;
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 50%;
+          }
+          .cta-content h3 { margin: 0; font-size: 1.4rem; font-weight: 900; }
+          .cta-content p { margin: 10px 0 0 0; font-size: 0.95rem; opacity: 0.9; line-height: 1.5; }
           .cta-button {
               background: white;
               color: var(--accent-primary);
-              padding: 12px;
-              border-radius: 14px;
+              padding: 14px;
+              border-radius: 16px;
               font-weight: 800;
-              font-size: 0.95rem;
-              transition: transform 0.2s;
+              font-size: 1rem;
+              transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+              border: none;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
           }
+          .cta-button:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
           .cta-button:active { transform: scale(0.96); }
 
           .profile-card {
               background: var(--card-bg);
-              border-radius: 28px;
-              padding: 2rem 1.5rem;
+              border-radius: 32px;
+              padding: 2.5rem 1.5rem;
               text-align: center;
               box-shadow: var(--shadow-md);
               border: 1px solid var(--border-color);
@@ -202,71 +222,76 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user, savedCount, cachedCount
               display: flex;
               flex-direction: column;
               align-items: center;
-              gap: 1rem;
-              margin-bottom: 2rem;
+              gap: 1.25rem;
+              margin-bottom: 2.5rem;
           }
           .avatar-circle {
-              width: 84px; height: 84px;
+              width: 92px; height: 92px;
               background: linear-gradient(135deg, var(--accent-primary), #ff2d55);
               border-radius: 50%;
               display: flex; align-items: center; justify-content: center;
-              font-size: 2rem; font-weight: 800; color: white;
-              box-shadow: 0 8px 20px rgba(88, 86, 214, 0.2);
+              font-size: 2.25rem; font-weight: 900; color: white;
+              box-shadow: 0 10px 25px rgba(88, 86, 214, 0.25);
+              border: 4px solid var(--card-bg);
           }
           .avatar-circle.guest {
-              background: var(--accent-secondary);
+              background: var(--bg-color);
               color: var(--accent-primary);
               box-shadow: none;
               border: 2px dashed var(--accent-primary);
           }
-          .user-name { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; }
-          .user-subtext { color: var(--text-secondary); font-size: 0.9rem; margin: 4px 0 0 0; }
+          .user-name { margin: 0; font-size: 1.75rem; font-weight: 900; letter-spacing: -0.8px; color: var(--text-primary); }
+          .user-subtext { color: var(--text-secondary); font-size: 0.95rem; margin: 6px 0 0 0; font-weight: 500; }
 
-          .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 2rem; }
+          .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 2.5rem; }
           .stat-box {
               background: var(--bg-color);
-              padding: 1rem 0.5rem;
-              border-radius: 18px;
+              padding: 1.25rem 0.5rem;
+              border-radius: 20px;
               text-align: center;
               border: 1px solid var(--border-color);
-              display: flex; flex-direction: column; align-items: center; gap: 6px;
+              display: flex; flex-direction: column; align-items: center; gap: 8px;
+              min-width: 0;
           }
-          .stat-box.learning { background: rgba(255, 193, 7, 0.04); color: #f57f17; border-color: rgba(255, 193, 7, 0.1); }
-          .stat-box.mastered { background: rgba(0, 200, 83, 0.04); color: #2e7d32; border-color: rgba(0, 200, 83, 0.1); }
-          .stat-val { font-size: 1.5rem; font-weight: 800; line-height: 1; }
-          .stat-label { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
-          .stat-icon { opacity: 0.6; }
+          .stat-box.learning { background: rgba(255, 193, 7, 0.05); color: #f57f17; border-color: rgba(255, 193, 7, 0.15); }
+          .stat-box.mastered { background: rgba(0, 200, 83, 0.05); color: #2e7d32; border-color: rgba(0, 200, 83, 0.15); }
+          .stat-val { font-size: 1.6rem; font-weight: 900; line-height: 1; letter-spacing: -0.5px; }
+          .stat-label { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; opacity: 0.7; }
+          .stat-icon { opacity: 0.7; transform: scale(0.9); }
 
           .readiness-section {
               text-align: left;
               background: var(--bg-color);
-              padding: 1.25rem;
-              border-radius: 20px;
-              margin-bottom: 2rem;
+              padding: 1.5rem;
+              border-radius: 24px;
+              margin-bottom: 2.5rem;
               border: 1px solid var(--border-color);
           }
-          .readiness-header { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; }
-          .readiness-label { font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); letter-spacing: 0.5px; }
-          .readiness-value { font-size: 0.9rem; font-weight: 800; color: var(--accent-primary); }
-          .progress-track { width: 100%; height: 8px; background: var(--accent-secondary); border-radius: 10px; overflow: hidden; }
-          .progress-fill { height: 100%; background: var(--accent-primary); transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 10px; }
-          .readiness-footer { font-size: 0.75rem; color: var(--text-muted); margin-top: 10px; font-weight: 600; text-align: center; }
+          .readiness-header { display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center; }
+          .readiness-label { font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); letter-spacing: 0.8px; text-transform: uppercase; }
+          .readiness-value { font-size: 1rem; font-weight: 900; color: var(--accent-primary); }
+          .progress-track { width: 100%; height: 10px; background: var(--accent-secondary); border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color); }
+          .progress-fill { height: 100%; background: var(--accent-primary); transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 12px; }
+          .readiness-footer { font-size: 0.8rem; color: var(--text-muted); margin-top: 12px; font-weight: 700; text-align: center; }
 
           .action-stack { display: flex; flex-direction: column; }
           .settings-trigger-btn {
               width: 100%;
-              padding: 1rem;
-              border-radius: 16px;
-              font-weight: 700;
+              padding: 1.1rem;
+              border-radius: 18px;
+              font-weight: 800;
               font-size: 1rem;
               display: flex; align-items: center; justify-content: center;
               gap: 12px;
-              transition: all 0.2s;
+              transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
               background: var(--bg-color); 
               color: var(--text-primary); 
-              border: 1px solid var(--border-color); 
+              border: 1.5px solid var(--border-color); 
+              box-shadow: var(--shadow-sm);
           }
+          .settings-trigger-btn:hover { border-color: var(--accent-primary); background: var(--card-bg); transform: translateY(-1px); }
           .settings-trigger-btn:active { background: var(--accent-secondary); transform: scale(0.98); }
+          .btn-icon { font-size: 1.25rem; }
         `}</style>
     </div>
   );

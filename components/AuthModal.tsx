@@ -151,9 +151,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
       <div className="auth-overlay" onClick={onClose}>
         <div className="auth-container manage-account-container" onClick={(e) => e.stopPropagation()}>
           <div className="auth-header">
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{confirmingAction ? 'Dangerous Action' : 'Account Settings'}</h3>
+            <h3>{confirmingAction ? 'Dangerous Action' : 'Account Settings'}</h3>
             {!confirmingAction && (
-              <button onClick={onClose} className="close-x-btn" style={{ background: 'var(--accent-secondary)', padding: '8px', borderRadius: '12px', display: 'flex' }}>
+              <button onClick={onClose} className="close-x-btn">
                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             )}
@@ -210,58 +210,311 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
                       <h4 className="profile-name">{userDisplayName}</h4>
                       <p className="profile-email">{userEmail}</p>
                   </div>
+                  <div className="status-dot"></div>
               </div>
 
               {message && (
-                <div style={{ padding: '12px', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1rem', border: '1px solid currentColor', background: message.type === 'success' ? 'rgba(0, 200, 83, 0.1)' : 'rgba(255, 59, 48, 0.1)', color: message.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)' }}>
+                <div className={`settings-notification ${message.type}`}>
+                  <span className="msg-icon">{message.type === 'success' ? '✓' : '!'}</span>
                   {message.text}
                 </div>
               )}
 
               <div className="settings-list">
-                  <div className="settings-section">
-                      <label className="section-label">General</label>
-                      <button className="settings-item" onClick={onClose}>
-                          <span className="item-icon">📝</span>
-                          <div className="item-text">
-                              <span className="item-title">Update Profile</span>
-                              <span className="item-desc">Change your display name</span>
+                  <div className="settings-group">
+                      <h5 className="settings-label">User Preferences</h5>
+                      <button className="settings-card" onClick={onClose}>
+                          <div className="card-icon-box profile">👤</div>
+                          <div className="card-text">
+                              <span className="card-title">Display Profile</span>
+                              <span className="card-desc">Personalize your identity</span>
                           </div>
-                          <span className="item-arrow">›</span>
+                          <span className="card-arrow">›</span>
                       </button>
-                  </div>
-
-                  <div className="settings-section destructive-zone">
-                      <label className="section-label">Safe-Guard Area</label>
-                      <button className="settings-item" onClick={() => startDestructiveAction('reset')}>
-                          <span className="item-icon">🔄</span>
-                          <div className="item-text">
-                              <span className="item-title">Reset Progress</span>
-                              <span className="item-desc">Restart SRS learning history</span>
-                          </div>
-                      </button>
-                      <button className="settings-item danger" onClick={() => startDestructiveAction('wipe')}>
-                          <span className="item-icon">🗑️</span>
-                          <div className="item-text">
-                              <span className="item-title">Wipe Cloud Data</span>
-                              <span className="item-desc">Permanently delete all library data</span>
+                      <button className="settings-card" onClick={onSignOut}>
+                          <div className="card-icon-box logout">🚪</div>
+                          <div className="card-text">
+                              <span className="card-title">Sign Out</span>
+                              <span className="card-desc">Securely exit your session</span>
                           </div>
                       </button>
                   </div>
 
-                  <div className="settings-section">
-                      <button className="auth-btn logout-btn" onClick={onSignOut}>
-                          Sign Out
-                      </button>
+                  <div className="settings-group destructive">
+                      <h5 className="settings-label">Privacy & Data</h5>
+                      <div className="destructive-container">
+                          <button className="settings-card secondary" onClick={() => startDestructiveAction('reset')}>
+                              <div className="card-icon-box reset">🔄</div>
+                              <div className="card-text">
+                                  <span className="card-title">Reset SRS History</span>
+                                  <span className="card-desc">Start fresh with level 0</span>
+                              </div>
+                          </button>
+                          <button className="settings-card danger" onClick={() => startDestructiveAction('wipe')}>
+                              <div className="card-icon-box wipe">🗑️</div>
+                              <div className="card-text">
+                                  <span className="card-title">Clear All Data</span>
+                                  <span className="card-desc">Permanently delete library</span>
+                              </div>
+                          </button>
+                      </div>
                   </div>
               </div>
             </>
           )}
 
           <div className="account-footer-info">
-              LexiFlow v2.5 • Secured Session
+              LexiFlow Advanced Engine v2.5
           </div>
         </div>
+        <style>{`
+          .manage-account-container {
+              max-width: 420px !important;
+              width: 95%;
+              padding: 2.25rem !important;
+              border-radius: 36px !important;
+              background: var(--card-bg) !important;
+          }
+          .manage-profile-header {
+              display: flex;
+              align-items: center;
+              gap: 1.25rem;
+              padding: 1.5rem;
+              background: linear-gradient(135deg, var(--accent-secondary), var(--bg-color));
+              border-radius: 28px;
+              margin-bottom: 2rem;
+              border: 1px solid var(--border-color);
+              position: relative;
+              box-shadow: var(--shadow-sm);
+          }
+          .status-dot {
+              position: absolute;
+              top: 1.2rem;
+              right: 1.2rem;
+              width: 10px;
+              height: 10px;
+              background: var(--success-color);
+              border-radius: 50%;
+              box-shadow: 0 0 10px var(--success-color);
+          }
+          .profile-badge {
+              width: 68px;
+              height: 68px;
+              background: linear-gradient(135deg, var(--accent-primary), #ff2d55);
+              color: white;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 2rem;
+              font-weight: 900;
+              flex-shrink: 0;
+              box-shadow: 0 8px 20px rgba(88, 86, 214, 0.3);
+              border: 4px solid white;
+          }
+          .profile-name { margin: 0; font-size: 1.35rem; font-weight: 900; color: var(--text-primary); letter-spacing: -0.8px; }
+          .profile-email { margin: 4px 0 0 0; font-size: 0.9rem; color: var(--text-secondary); opacity: 0.8; font-weight: 600; }
+          
+          .settings-notification {
+              padding: 14px;
+              border-radius: 18px;
+              font-size: 0.85rem;
+              font-weight: 600;
+              margin-bottom: 1.5rem;
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              animation: slideIn 0.3s ease;
+          }
+          .settings-notification.success { background: rgba(0, 200, 83, 0.08); color: var(--success-color); border: 1px solid rgba(0, 200, 83, 0.15); }
+          .settings-notification.error { background: rgba(255, 59, 48, 0.08); color: var(--danger-color); border: 1px solid rgba(255, 59, 48, 0.15); }
+          .msg-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: currentColor; color: white; border-radius: 50%; font-size: 0.7rem; font-weight: 900; }
+          
+          .settings-list {
+              display: flex;
+              flex-direction: column;
+              gap: 2rem;
+          }
+          .settings-group {
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+          }
+          .settings-label { 
+              font-size: 0.7rem; 
+              font-weight: 900; 
+              color: var(--accent-primary); 
+              margin: 0 0 4px 6px;
+              letter-spacing: 1.5px; 
+              text-transform: uppercase;
+              opacity: 0.9;
+          }
+          .destructive-container {
+              background: rgba(255, 59, 48, 0.02);
+              border: 2px dashed rgba(255, 59, 48, 0.1);
+              padding: 14px;
+              border-radius: 28px;
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+          }
+          
+          .settings-card {
+              display: flex;
+              align-items: center;
+              gap: 16px;
+              padding: 16px;
+              border-radius: 20px;
+              background: var(--bg-color);
+              border: 1.5px solid var(--border-color);
+              text-align: left;
+              transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+              width: 100%;
+              cursor: pointer;
+              line-height: normal;
+          }
+          .settings-card:hover { transform: translateY(-3px); border-color: var(--accent-primary); box-shadow: 0 10px 25px rgba(88, 86, 214, 0.12); }
+          .settings-card:active { transform: scale(0.97); }
+          
+          .settings-card.danger { border-color: rgba(255, 59, 48, 0.1); background: white; }
+          .settings-card.danger:hover { border-color: var(--danger-color); background: rgba(255, 59, 48, 0.02); }
+          .settings-card.danger .card-title { color: var(--danger-color); }
+          
+          .card-icon-box {
+              width: 44px;
+              height: 44px;
+              border-radius: 14px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 1.25rem;
+              flex-shrink: 0;
+              background: var(--accent-secondary);
+              color: var(--accent-primary);
+          }
+          .card-icon-box.logout { background: #f0f0f5; color: #555; }
+          .card-icon-box.reset { background: #fff8e1; color: #ffa000; }
+          .card-icon-box.wipe { background: #ffebee; color: #d32f2f; }
+          
+          .card-text { 
+              flex: 1; 
+              display: flex; 
+              flex-direction: column; 
+              overflow: hidden; 
+              min-width: 0;
+              gap: 2px;
+          }
+          .card-title { font-size: 1rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.3px; }
+          .card-desc { font-size: 0.8rem; color: var(--text-secondary); opacity: 0.7; font-weight: 500; }
+          .card-arrow { color: var(--text-muted); font-size: 1.4rem; opacity: 0.3; margin-left: auto; }
+
+          .destructive-confirmation-view {
+              display: flex;
+              flex-direction: column;
+              gap: 1.75rem;
+              padding: 0.5rem 0;
+          }
+          .warning-banner {
+              background: rgba(255, 59, 48, 0.06);
+              color: var(--danger-color);
+              padding: 1.5rem;
+              border-radius: 24px;
+              display: flex;
+              gap: 16px;
+              font-size: 0.95rem;
+              line-height: 1.5;
+              font-weight: 700;
+              border: 1px solid rgba(255, 59, 48, 0.1);
+          }
+          .warning-icon { font-size: 2.25rem; flex-shrink: 0; }
+          .challenge-prompt { font-size: 1rem; font-weight: 700; text-align: center; color: var(--text-secondary); margin: 0; }
+          .challenge-word { color: var(--danger-color); font-weight: 900; letter-spacing: 2px; text-decoration: underline; background: rgba(255, 59, 48, 0.05); padding: 2px 8px; border-radius: 8px; }
+          
+          .challenge-input {
+              width: 100%;
+              padding: 18px;
+              border-radius: 20px;
+              border: 3px solid var(--border-color);
+              text-align: center;
+              font-size: 1.5rem;
+              font-weight: 900;
+              background: var(--bg-color);
+              color: var(--text-primary);
+              transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              letter-spacing: 4px;
+          }
+          .challenge-input:focus { border-color: var(--danger-color); outline: none; box-shadow: 0 0 20px rgba(255, 59, 48, 0.1); transform: scale(1.02); }
+          
+          .confirmation-actions {
+              display: flex;
+              gap: 14px;
+          }
+          .cancel-btn { flex: 1; background: var(--bg-color); color: var(--text-primary); border: 2px solid var(--border-color); border-radius: 18px; font-weight: 800; }
+          .confirm-destructive-btn { 
+              flex: 1.5; 
+              background: var(--danger-color); 
+              color: white; 
+              border-radius: 18px;
+              font-weight: 900;
+              box-shadow: 0 8px 20px rgba(255, 59, 48, 0.25);
+          }
+          .confirm-destructive-btn:disabled { background: var(--text-muted); opacity: 0.4; transform: none !important; box-shadow: none; }
+          
+          .account-footer-info {
+              text-align: center;
+              font-size: 0.65rem;
+              color: var(--text-muted);
+              margin-top: 3rem;
+              letter-spacing: 1px;
+              text-transform: uppercase;
+              font-weight: 800;
+              opacity: 0.6;
+          }
+
+          .auth-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 1.5rem;
+              padding-bottom: 1.25rem;
+              border-bottom: 2px solid var(--accent-secondary);
+          }
+          .auth-header h3 {
+              margin: 0;
+              font-size: 1.4rem;
+              font-weight: 900;
+              color: var(--text-primary);
+              letter-spacing: -0.8px;
+          }
+          .close-x-btn {
+            background: var(--accent-primary);
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: none;
+            box-shadow: 0 8px 20px rgba(88, 86, 214, 0.25);
+            cursor: pointer;
+            padding: 0;
+            flex-shrink: 0;
+          }
+          .close-x-btn:hover { 
+            transform: scale(1.1) rotate(90deg); 
+            background: #ff2d55; 
+            box-shadow: 0 10px 25px rgba(255, 45, 85, 0.35);
+          }
+          .close-x-btn:active { transform: scale(0.9); }
+          .close-x-btn svg { width: 22px; height: 22px; }
+          
+          @keyframes slideIn {
+              from { opacity: 0; transform: translateY(-10px); }
+              to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
       </div>
     );
   }
@@ -270,9 +523,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, userDisplayName, userEma
     <div className="auth-overlay" onClick={onClose}>
       <div className="auth-container" onClick={(e) => e.stopPropagation()}>
         <div className="auth-header">
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{isLogin ? 'Sign In' : 'Create Account'}</h3>
-          <button onClick={onClose} className="close-x-btn" style={{ background: 'var(--accent-secondary)', padding: '8px', borderRadius: '12px', display: 'flex' }}>
-             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <h3>{isLogin ? 'Sign In' : 'Create Account'}</h3>
+          <button onClick={onClose} className="close-x-btn">
+             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
         
