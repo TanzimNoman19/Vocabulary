@@ -3,7 +3,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { SRSItem } from '../services/srsService';
 import { CardData, capitalize, generateSemanticClusters } from '../services/dictionaryService';
 import { SemanticCluster } from '../App';
@@ -52,8 +52,13 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     semanticClusters, setSemanticClusters, clusterSimilarity, setClusterSimilarity, isOnline
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
-  const [sortBy, setSortBy] = useState<SortType>('time');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [sortBy, setSortBy] = useState<SortType>(() => localStorage.getItem('lexiflow_sortBy') as SortType || 'time');
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => localStorage.getItem('lexiflow_sortOrder') as SortOrder || 'desc');
+
+  useEffect(() => {
+    localStorage.setItem('lexiflow_sortBy', sortBy);
+    localStorage.setItem('lexiflow_sortOrder', sortOrder);
+  }, [sortBy, sortOrder]);
   const [filter, setFilter] = useState<MasteryFilter>('all');
   const [viewType, setViewType] = useState<ViewType>('list');
   const [selectedFamilyGroup, setSelectedFamilyGroup] = useState<FamilyGroup | null>(null);
@@ -92,11 +97,12 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             const res = a.localeCompare(b);
             return sortOrder === 'asc' ? res : -res;
         } else if (sortBy === 'time') {
-            // Sort by addition time (index in savedWords)
-            // Lower index is older, higher index is newer
+            // Newest at index 0 (prepended in App.tsx)
+            // 'asc' -> Oldest First (Highest index first)
+            // 'desc' -> Newest First (Lowest index first)
             const idxA = savedWords.indexOf(a);
             const idxB = savedWords.indexOf(b);
-            return sortOrder === 'asc' ? idxA - idxB : idxB - idxA;
+            return sortOrder === 'asc' ? idxB - idxA : idxA - idxB;
         } else {
             // Smart Sort: Prioritize recently added/interacted, then due words, then mastery level
             const itemA = srsData[a];
