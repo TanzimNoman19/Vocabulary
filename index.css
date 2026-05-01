@@ -257,6 +257,30 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.status-badge.new-word {
+  background: var(--accent-secondary);
+  color: var(--accent-primary);
+}
+
+.status-badge.learning {
+  background: rgba(255, 193, 7, 0.1);
+  color: #f57f17;
+  border: 1px solid rgba(255, 193, 7, 0.15);
+}
+
+.status-badge.mastered {
+  background: rgba(0, 200, 83, 0.1);
+  color: #2e7d32;
+  border: 1px solid rgba(0, 200, 83, 0.15);
+}
+
+.status-badge.re-learning {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .tap-hint {

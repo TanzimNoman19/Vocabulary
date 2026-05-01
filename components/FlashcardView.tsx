@@ -180,13 +180,13 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
   const srsItem = srsData[topic];
   
   const getStatusLabel = () => {
-    if (isExploreMode) return `DISCOVERING ${exploreProgress?.current}/${exploreProgress?.total}`;
-    if (!srsItem || srsItem.reviewCount === 0) return 'NEW WORD';
-    if (srsItem.masteryLevel >= 5) return 'MASTERED';
-    return 'LEARNING';
+    if (isExploreMode) return { text: `DISCOVERING ${exploreProgress?.current}/${exploreProgress?.total}`, class: 'explore-badge' };
+    if (!srsItem || srsItem.reviewCount === 0) return { text: 'NEW WORD', class: 'new-word' };
+    if (srsItem.masteryLevel >= 5) return { text: 'MASTERED', class: 'mastered' };
+    return { text: 'LEARNING', class: 'learning' };
   };
 
-  const statusLabel = getStatusLabel();
+  const { text: statusText, class: statusClass } = getStatusLabel();
   
   const parseList = (val: any) => {
     if (!val || val === 'N/A') return [];
@@ -229,7 +229,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem', fontSize: '0.9rem' }}>{errorMsg}</p>
            ) : (
                <>
-                <div className={`status-badge ${isExploreMode ? 'explore-badge' : statusLabel.replace(' ', '-').toLowerCase()}`}>{statusLabel}</div>
+                <div className={`status-badge ${statusClass}`}>{statusText}</div>
                 <div className="tap-hint">{isLoading ? 'Fetching details...' : 'Tap to reveal details'}</div>
                </>
            )}
@@ -531,11 +531,6 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
           }
           .fav-btn:active {
             transform: scale(0.9);
-          }
-          .status-badge.re-learning {
-              background: rgba(239, 68, 68, 0.1);
-              color: var(--danger-color);
-              border: 1px solid rgba(239, 68, 68, 0.2);
           }
           .synonyms-antonyms-container {
             display: flex;
