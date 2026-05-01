@@ -70,8 +70,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, sa
         let exists = 0;
         let recovered = 0;
         let newW = 0;
-        const unique = new Set(words.map(w => w.toLowerCase()));
-        unique.forEach(w => {
+        const unique = new Set<string>(words.map(w => w.toLowerCase()));
+        unique.forEach((w: string) => {
             const status = getStatus(w);
             if (status === 'library') exists++;
             else if (status === 'archive' || status === 'trash') recovered++;

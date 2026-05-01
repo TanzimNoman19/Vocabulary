@@ -16,12 +16,13 @@ interface CardSettingsModalProps {
   theme: 'light' | 'dark';
   onUpdateTheme: (t: 'light' | 'dark') => void;
   onClose: () => void;
+  onOpenLabelManager?: () => void;
 }
 
-type ActiveSection = 'visibility' | 'explore' | 'ai' | 'appearance' | 'advanced' | null;
+type ActiveSection = 'visibility' | 'explore' | 'ai' | 'appearance' | 'advanced' | 'labels' | null;
 
 const CardSettingsModal: React.FC<CardSettingsModalProps> = ({ 
-    visibility, onUpdateVisibility, explorePackSize, onUpdatePackSize, definitionStyle, onUpdateDefinitionStyle, theme, onUpdateTheme, onClose 
+    visibility, onUpdateVisibility, explorePackSize, onUpdatePackSize, definitionStyle, onUpdateDefinitionStyle, theme, onUpdateTheme, onClose, onOpenLabelManager
 }) => {
   const [activeSection, setActiveSection] = useState<ActiveSection>(null);
 
@@ -104,6 +105,29 @@ const CardSettingsModal: React.FC<CardSettingsModalProps> = ({
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            <div className={`accordion-box ${activeSection === 'labels' ? 'active' : ''}`}>
+              <div className="accordion-header" onClick={() => toggleSection('labels')}>
+                <div className="header-text">
+                  <span className="header-emoji">🏷️</span>
+                  <span>Labels & Tags</span>
+                </div>
+                <svg className="chevron" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+              <div className="accordion-content">
+                <p className="content-hint">Create, edit, or delete your word labels.</p>
+                <button 
+                  className="auth-btn secondary" 
+                  style={{ width: '100%', marginTop: '0.5rem', height: '48px', borderRadius: '14px' }}
+                  onClick={() => {
+                    onClose();
+                    onOpenLabelManager?.();
+                  }}
+                >
+                  Manage All Labels
+                </button>
               </div>
             </div>
 

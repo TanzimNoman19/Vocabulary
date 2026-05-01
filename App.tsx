@@ -29,14 +29,6 @@ export interface VisibilitySettings {
   usageNotes: boolean;
 }
 
-export interface SemanticCluster {
-    id: string;
-    title: string;
-    members: string[];
-    explanation: string;
-    isAiGenerated: boolean;
-}
-
 const DEFAULT_VISIBILITY: VisibilitySettings = {
   definition: true,
   bengali: true,
@@ -46,6 +38,12 @@ const DEFAULT_VISIBILITY: VisibilitySettings = {
   family: true,
   usageNotes: true
 };
+
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
 
 const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('theme') as 'light' | 'dark' || 'light');
@@ -61,8 +59,19 @@ const App: React.FC = () => {
   const [srsData, setSrsData] = useState<Record<string, SRSItem>>(() => JSON.parse(localStorage.getItem('srsData') || '{}'));
   const [cardCache, setCardCache] = useState<Record<string, CardData>>(() => JSON.parse(localStorage.getItem('cardCache') || '{}'));
   
-  const [semanticClusters, setSemanticClusters] = useState<SemanticCluster[]>(() => JSON.parse(localStorage.getItem('semanticClusters') || '[]'));
-  const [clusterSimilarity, setClusterSimilarity] = useState<number>(() => Number(localStorage.getItem('clusterSimilarity')) || 1);
+  const [labels, setLabels] = useState<Label[]>(() => JSON.parse(localStorage.getItem('lexiflow_labels') || '[]'));
+  const [wordLabels, setWordLabels] = useState<Record<string, string[]>>(() => JSON.parse(localStorage.getItem('lexiflow_wordLabels') || '{}'));
+  const [activeLabelFilters, setActiveLabelFilters] = useState<string[]>(() => JSON.parse(localStorage.getItem('lexiflow_activeLabelFilters') || '[]'));
+  const [labelFilterLogic, setLabelFilterLogic] = useState<'AND' | 'OR'>(() => (localStorage.getItem('lexiflow_labelFilterLogic') as 'AND' | 'OR') || 'OR');
+  
+  const [isLabelManagerOpen, setIsLabelManagerOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('lexiflow_labels', JSON.stringify(labels));
+    localStorage.setItem('lexiflow_wordLabels', JSON.stringify(wordLabels));
+    localStorage.setItem('lexiflow_activeLabelFilters', JSON.stringify(activeLabelFilters));
+    localStorage.setItem('lexiflow_labelFilterLogic', labelFilterLogic);
+  }, [labels, wordLabels, activeLabelFilters, labelFilterLogic]);
 
   useEffect(() => {
     let hasChanged = false;
@@ -170,8 +179,8 @@ const App: React.FC = () => {
         setFavoriteWords((cloudData.favoriteWords || []).map(capitalize));
         setArchivedWords((cloudData.archivedWords || []).map(capitalize));
         setTrashedWords((cloudData.trashedWords || []).map(capitalize));
-        setSemanticClusters(cloudData.semanticClusters || []);
-        if (cloudData.clusterSimilarity !== undefined) setClusterSimilarity(cloudData.clusterSimilarity);
+        if (cloudData.labels) setLabels(cloudData.labels);
+        if (cloudData.wordLabels) setWordLabels(cloudData.wordLabels);
         
         const srs: Record<string, SRSItem> = {};
         Object.entries(cloudData.srsData || {}).forEach(([k, v]) => { srs[capitalize(k)] = v as SRSItem; });
@@ -213,11 +222,12 @@ const App: React.FC = () => {
     localStorage.setItem('visibilitySettings', JSON.stringify(visibilitySettings));
     localStorage.setItem('explorePackSize', String(explorePackSize));
     localStorage.setItem('definitionStyle', definitionStyle);
-    localStorage.setItem('semanticClusters', JSON.stringify(semanticClusters));
-    localStorage.setItem('clusterSimilarity', String(clusterSimilarity));
 
-    if (user && isOnline) saveUserData(user.id, { savedWords, favoriteWords, archivedWords, trashedWords, srsData, cardCache, semanticClusters, clusterSimilarity });
-  }, [savedWords, favoriteWords, archivedWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings, explorePackSize, definitionStyle, semanticClusters, clusterSimilarity]);
+    if (user && isOnline) saveUserData(user.id, { 
+      savedWords, favoriteWords, archivedWords, trashedWords, srsData, cardCache,
+      labels, wordLabels
+    });
+  }, [savedWords, favoriteWords, archivedWords, trashedWords, srsData, cardCache, user, isOnline, visibilitySettings, explorePackSize, definitionStyle, labels, wordLabels]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -245,9 +255,22 @@ const App: React.FC = () => {
           }
           return;
       }
-      if (savedWords.length > 0) {
-          const dueCached = getDueWords(savedWords, srsData);
-          const nextWord = dueCached[0] || savedWords[Math.floor(Math.random() * savedWords.length)];
+
+      let wordsToUse = [...savedWords];
+      if (activeLabelFilters.length > 0) {
+          wordsToUse = wordsToUse.filter(word => {
+              const currentLabels = wordLabels[word] || [];
+              if (labelFilterLogic === 'OR') {
+                  return activeLabelFilters.some(id => currentLabels.includes(id));
+              } else {
+                  return activeLabelFilters.every(id => currentLabels.includes(id));
+              }
+          });
+      }
+
+      if (wordsToUse.length > 0) {
+          const dueCached = getDueWords(wordsToUse, srsData);
+          const nextWord = dueCached[0] || wordsToUse[Math.floor(Math.random() * wordsToUse.length)];
           setShouldStartFlipped(false);
           setCurrentTopic(capitalize(nextWord));
       } else {
@@ -584,6 +607,10 @@ const App: React.FC = () => {
               visibilitySettings={visibilitySettings}
               isExploreMode={isExploreMode}
               exploreProgress={isExploreMode ? { current: exploreIndex + 1, total: explorePack.length } : undefined}
+              labels={labels}
+              wordLabels={wordLabels}
+              activeLabelFilters={activeLabelFilters}
+              labelFilterLogic={labelFilterLogic}
             />
         </div>
         <div className={`tab-view ${activeTab === 'saved' ? 'active' : ''}`}>
@@ -603,11 +630,17 @@ const App: React.FC = () => {
                 onOpenImport={() => setIsBulkImportOpen(true)}
                 onUpdateWordData={handleUpdateWordData}
                 onEditWords={(words) => setEditingQueue(words)}
-                semanticClusters={semanticClusters}
-                setSemanticClusters={setSemanticClusters}
-                clusterSimilarity={clusterSimilarity}
-                setClusterSimilarity={setClusterSimilarity}
                 isOnline={isOnline}
+                labels={labels}
+                setLabels={setLabels}
+                wordLabels={wordLabels}
+                setWordLabels={setWordLabels}
+                activeLabelFilters={activeLabelFilters}
+                setActiveLabelFilters={setActiveLabelFilters}
+                labelFilterLogic={labelFilterLogic}
+                setLabelFilterLogic={setLabelFilterLogic}
+                isLabelManagerOpen={isLabelManagerOpen}
+                setIsLabelManagerOpen={setIsLabelManagerOpen}
             />
         </div>
         <div className={`tab-view ${activeTab === 'profile' ? 'active' : ''}`}>
@@ -654,6 +687,7 @@ const App: React.FC = () => {
             theme={theme}
             onUpdateTheme={setTheme}
             onClose={() => setIsSettingsOpen(false)} 
+            onOpenLabelManager={() => setIsLabelManagerOpen(true)}
         />
       )}
       {isTrashOpen && (

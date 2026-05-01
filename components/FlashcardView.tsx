@@ -8,7 +8,7 @@ import { fetchWordData, CardData, getShortDefinition } from '../services/diction
 import { Grade, SRSItem } from '../services/srsService';
 import InteractiveText from './InteractiveText';
 import WordTooltip from './WordTooltip';
-import type { VisibilitySettings } from '../App';
+import type { VisibilitySettings, Label } from '../App';
 
 interface FlashcardViewProps {
   topic: string;
@@ -27,11 +27,16 @@ interface FlashcardViewProps {
   visibilitySettings: VisibilitySettings;
   isExploreMode?: boolean;
   exploreProgress?: { current: number, total: number };
+  labels: Label[];
+  wordLabels: Record<string, string[]>;
+  activeLabelFilters: string[];
+  labelFilterLogic: 'AND' | 'OR';
 }
 
 const FlashcardView: React.FC<FlashcardViewProps> = ({ 
     topic, initialFlipped = false, savedWords, favoriteWords, srsData, cardCache, onUpdateSRS, onToggleFavorite, onNavigate, onCacheUpdate, onOpenImport, isOnline, visibilitySettings,
-    isExploreMode = false, exploreProgress
+    isExploreMode = false, exploreProgress,
+    labels, wordLabels, activeLabelFilters, labelFilterLogic
 }) => {
   const [isFlipped, setIsFlipped] = useState(initialFlipped);
   const [data, setData] = useState<CardData>({
@@ -207,7 +212,17 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
                </button>
            </div>
-           <div className="word-display">{topic}</div>
+           
+           <div className="word-container">
+               <div className="front-label-indicators-inline">
+                    {(wordLabels[topic] || []).map(labelId => {
+                        const label = labels.find(l => l.id === labelId);
+                        if (!label) return null;
+                        return <div key={labelId} className="card-label-dot" style={{ backgroundColor: label.color }} />;
+                    })}
+               </div>
+               <div className="word-display">{topic}</div>
+           </div>
            <div className="pos-tag">{errorMsg ? '⚠️ ERROR' : (data.pos || '...')}</div>
            
            {errorMsg ? (
@@ -306,6 +321,18 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
                     </div>
                     </>
                 )}
+                
+                <div className="back-labels-list">
+                    {(wordLabels[topic] || []).map(labelId => {
+                        const label = labels.find(l => l.id === labelId);
+                        if (!label) return null;
+                        return (
+                            <span key={labelId} className="back-label-pill" style={{ '--label-color': label.color } as any}>
+                                {label.name}
+                            </span>
+                        );
+                    })}
+                </div>
            </div>
 
            <div className="card-back-footer">
@@ -514,6 +541,46 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+          }
+
+          /* LABEL STYLES */
+          .word-container {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              width: 100%;
+              padding: 0 2rem;
+          }
+          .front-label-indicators-inline {
+              display: flex;
+              gap: 5px;
+          }
+          .card-label-dot {
+              width: 7px;
+              height: 7px;
+              border-radius: 50%;
+              box-shadow: 0 0 4px rgba(0,0,0,0.1);
+              flex-shrink: 0;
+          }
+          .back-labels-list {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 6px;
+              margin-top: 1.5rem;
+              margin-bottom: 0.5rem;
+          }
+          .back-label-pill {
+              font-size: 0.6rem;
+              font-weight: 800;
+              padding: 4px 10px;
+              background: var(--accent-secondary);
+              color: var(--accent-primary);
+              border-radius: 8px;
+              border-left: 3.5px solid var(--label-color);
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
           }
       `}</style>
     </div>

@@ -6,7 +6,6 @@
 
 import { GoogleGenAI, Type } from '@google/genai';
 import { DICTIONARY_WORDS } from './dictionaryData';
-import { SemanticCluster } from '../App';
 
 export interface CardData {
   pos: string;
@@ -111,42 +110,6 @@ export async function fetchWordData(word: string, definitionStyle: string = 'sta
     console.error("fetchWordData failed", error);
     return localFallback;
   }
-}
-
-export async function generateSemanticClusters(words: string[], level: number = 1): Promise<SemanticCluster[]> {
-    if (!navigator.onLine || words.length === 0) return [];
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Group these vocabulary words into semantic clusters: ${words.join(', ')}. Complexity level: ${level}/2.`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
-            contents: prompt,
-            config: { 
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    members: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    explanation: { type: Type.STRING }
-                  },
-                  required: ["title", "members", "explanation"]
-                }
-              }
-            }
-        });
-        const data = safeJsonParse(response.text, []);
-        return data.map((item: any, idx: number) => ({
-            ...item,
-            id: `cluster-${idx}-${Date.now()}`,
-            isAiGenerated: true
-        }));
-    } catch (e) {
-        return [];
-    }
 }
 
 export async function fetchExplorePack(level: VocabLevel = 'intermediate', count: number = 10, excludeWords: string[] = []): Promise<CardData[]> {

@@ -9,7 +9,7 @@ import { GoogleGenAI } from '@google/genai';
 import { getShortDefinition as getShortDefShared, createChatSession as createChatShared, CardData } from './dictionaryService';
 
 // Re-export CardData for components that expect it in this module
-export { CardData };
+export type { CardData };
 
 // Define AsciiArtData interface used in AsciiArtDisplay component
 export interface AsciiArtData {
