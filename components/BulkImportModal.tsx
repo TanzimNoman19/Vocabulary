@@ -9,21 +9,27 @@ import { CardData, generateBulkWordData, searchVocabulary } from '../services/di
 interface BulkImportModalProps {
   onClose: () => void;
   onImport: (words: Record<string, CardData>) => void;
+  savedWords: string[];
+  archivedWords: string[];
+  trashedWords: string[];
 }
 
-const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) => {
+const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport, savedWords, archivedWords, trashedWords }) => {
   const [activeTab, setActiveTab] = useState<'ai' | 'json'>('ai');
   const [jsonInput, setJsonInput] = useState('');
   const [aiInput, setAiInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<'Copy Sample JSON' | 'Copied!'>('Copy Sample JSON');
-  const [summary, setSummary] = useState<{ total: number, unique: number } | null>(null);
+  const [summary, setSummary] = useState<{ total: number, unique: number, exists: number, recovered: number } | null>(null);
 
-  // Suggestions state
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const getStatus = (word: string) => {
+    const lower = word.toLowerCase();
+    if (savedWords.some(w => w.toLowerCase() === lower)) return 'library';
+    if (archivedWords.some(w => w.toLowerCase() === lower)) return 'archive';
+    if (trashedWords.some(w => w.toLowerCase() === lower)) return 'trash';
+    return null;
+  };
 
   useEffect(() => {
     if (activeTab === 'json' && jsonInput.trim()) {
@@ -31,7 +37,14 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
             const parsed = JSON.parse(jsonInput);
             if (Array.isArray(parsed)) {
                 const uniqueWords = new Set(parsed.map((i: any) => i.word?.toLowerCase()).filter(Boolean));
-                setSummary({ total: parsed.length, unique: uniqueWords.size });
+                let exists = 0;
+                let recovered = 0;
+                uniqueWords.forEach(w => {
+                    const status = getStatus(w);
+                    if (status === 'library') exists++;
+                    else if (status === 'archive' || status === 'trash') recovered++;
+                });
+                setSummary({ total: parsed.length, unique: uniqueWords.size, exists, recovered });
                 setError(null);
             } else {
                 setSummary(null);
@@ -42,7 +55,33 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
     } else {
         setSummary(null);
     }
-  }, [jsonInput, activeTab]);
+  }, [jsonInput, activeTab, savedWords, archivedWords, trashedWords]);
+
+  const [inputWordsSummary, setInputWordsSummary] = useState<{ exists: number, recovered: number, new: number } | null>(null);
+
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (activeTab === 'ai' && aiInput.trim()) {
+        const words = aiInput.split(/[,|\n]/).map(w => w.trim()).filter(w => w.length > 1);
+        let exists = 0;
+        let recovered = 0;
+        let newW = 0;
+        const unique = new Set(words.map(w => w.toLowerCase()));
+        unique.forEach(w => {
+            const status = getStatus(w);
+            if (status === 'library') exists++;
+            else if (status === 'archive' || status === 'trash') recovered++;
+            else newW++;
+        });
+        setInputWordsSummary({ exists, recovered, new: newW });
+    } else {
+        setInputWordsSummary(null);
+    }
+  }, [aiInput, activeTab, savedWords, archivedWords, trashedWords]);
 
   // Handle AI Suggestions
   useEffect(() => {
@@ -222,6 +261,12 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
                 <div className="ai-mode">
                     <p className="tab-hint">Enter words separated by commas or new lines. Gemini will generate full flashcards including definitions, word families, and usage tips.</p>
                     
+                    {inputWordsSummary && (
+                        <div className="import-summary-pill mb-4">
+                            <span>{inputWordsSummary.new} new, {inputWordsSummary.recovered} to recover, {inputWordsSummary.exists} match library</span>
+                        </div>
+                    )}
+
                     <div className="ai-input-wrapper">
                         <textarea 
                             ref={textareaRef}
@@ -271,8 +316,8 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ onClose, onImport }) 
                     <p className="tab-hint">Paste an array of objects. Perfect for migrating between devices or manually curating lists.</p>
                     
                     {summary && (
-                        <div className="import-summary-pill">
-                            <span>Detected {summary.total} entries ({summary.unique} unique)</span>
+                        <div className="import-summary-pill mb-4">
+                            <span>{summary.unique} unique ({summary.exists} in lib, {summary.recovered} to recover)</span>
                         </div>
                     )}
 

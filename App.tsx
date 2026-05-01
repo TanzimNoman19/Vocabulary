@@ -363,26 +363,43 @@ const App: React.FC = () => {
   const handleImportWords = (importedCache: Record<string, CardData>) => {
       const importedWordList = Object.keys(importedCache);
       const sanitizedCache: Record<string, CardData> = {};
-      const newWords: string[] = [];
+      const wordsToMoveToLibrary: string[] = [];
+      
       const existingWordSet = new Set(savedWords.map(w => w.toLowerCase()));
+      const archivedWordSet = new Set(archivedWords.map(w => w.toLowerCase()));
       const trashedWordSet = new Set(trashedWords.map(w => w.toLowerCase()));
+
       importedWordList.forEach(word => {
           const capWord = capitalize(word);
           const lowerWord = word.toLowerCase();
           sanitizedCache[capWord] = { ...importedCache[word], word: capWord };
+          
           if (!existingWordSet.has(lowerWord)) {
-              newWords.push(capWord);
+              wordsToMoveToLibrary.push(capWord);
+              
+              if (archivedWordSet.has(lowerWord)) {
+                  setArchivedWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
+              }
               if (trashedWordSet.has(lowerWord)) {
                   setTrashedWords(prev => prev.filter(w => w.toLowerCase() !== lowerWord));
               }
           }
       });
+
       setCardCache(prev => ({ ...prev, ...sanitizedCache }));
-      if (newWords.length > 0) {
-          setSavedWords(prev => [...newWords, ...prev]);
+      
+      if (wordsToMoveToLibrary.length > 0) {
+          setSavedWords(prev => [...new Set([...wordsToMoveToLibrary, ...prev])]);
           setSrsData(prev => {
               const next = { ...prev };
-              newWords.forEach(w => { if (!next[w]) next[w] = initializeSRSItem(w); });
+              wordsToMoveToLibrary.forEach(w => { 
+                if (!next[w]) next[w] = initializeSRSItem(w); 
+                else {
+                  // If it was in trash/archive, it might have SRS data already.
+                  // We keep it or reset it? The user said "moved from trash or archives to the library containing all the srs info"
+                  // This implies keeping the SRS info.
+                }
+              });
               return next;
           });
       }
@@ -617,7 +634,15 @@ const App: React.FC = () => {
         </nav>
       </div>
 
-      {isBulkImportOpen && <BulkImportModal onClose={() => setIsBulkImportOpen(false)} onImport={handleImportWords} />}
+      {isBulkImportOpen && (
+        <BulkImportModal 
+          onClose={() => setIsBulkImportOpen(false)} 
+          onImport={handleImportWords} 
+          savedWords={savedWords}
+          archivedWords={archivedWords}
+          trashedWords={trashedWords}
+        />
+      )}
       {isSettingsOpen && (
         <CardSettingsModal 
             visibility={visibilitySettings} 

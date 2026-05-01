@@ -551,11 +551,11 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
       <style>{`
         /* SELECTION BAR STYLES */
         .selection-bar {
-            position: absolute;
-            top: 0.75rem;
-            left: 0.75rem;
-            right: 0.75rem;
-            z-index: 200;
+            position: sticky;
+            top: 0.5rem;
+            left: 0.5rem;
+            right: 0.5rem;
+            z-index: 500;
             background: var(--accent-primary);
             color: white;
             padding: 10px 14px;
@@ -565,6 +565,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(88, 86, 214, 0.4);
             animation: selectionSlideDown 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            margin-bottom: 0.5rem;
         }
 
         @keyframes selectionSlideDown {
