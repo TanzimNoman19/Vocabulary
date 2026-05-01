@@ -96,10 +96,10 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1.2rem; /* Reduced by ~15% */
+  padding: 1rem 1.4rem;
   z-index: 50;
   background: var(--bg-color);
-  height: 64px; /* Reduced from 70px */
+  height: 70px;
 }
 
 .logo-text {

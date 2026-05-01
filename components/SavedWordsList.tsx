@@ -660,7 +660,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
 
         .saved-list-view { position: relative; }
 
-        .list-tabs-container { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; padding: 0; }
+        .list-tabs-container { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; padding: 0 4px; }
         .list-tabs { flex: 1; display: flex; gap: 6px; background: var(--accent-secondary); padding: 5px; border-radius: 16px; }
         .list-tabs button { flex: 1; padding: 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 800; color: var(--text-secondary); }
         .list-tabs button.active { background: var(--card-bg); color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.1); }
@@ -727,7 +727,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             margin-bottom: 1rem;
             overflow-x: auto;
             scrollbar-width: none;
-            padding: 2px 0;
+            padding: 2px;
         }
         .filter-chips::-webkit-scrollbar { display: none; }
         .filter-chips .chip {
@@ -845,14 +845,14 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             white-space: nowrap;
         }
 
-        .words-scroll-list { display: flex; flex-direction: column; gap: 0.65rem; padding: 0; }
+        .words-scroll-list { display: flex; flex-direction: column; gap: 0.65rem; padding: 0 4px; }
         .modern-word-card { 
             background: var(--card-bg); 
             border-radius: 20px; 
-            padding: 0.85rem 0.6rem; 
+            padding: 0.85rem 1.15rem; 
             display: flex; 
             align-items: flex-start; 
-            gap: 0.65rem; 
+            gap: 1rem; 
             border: 1px solid var(--border-color); 
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             cursor: pointer;
