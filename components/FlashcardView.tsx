@@ -551,7 +551,7 @@ const FlashcardView: React.FC<FlashcardViewProps> = ({
               justify-content: center;
               gap: 8px;
               width: 100%;
-              padding: 0 2rem;
+              padding: 0 0.5rem;
           }
           .front-label-indicators-inline {
               display: flex;

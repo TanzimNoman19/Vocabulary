@@ -104,10 +104,39 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     return val.split(',').map(s => s.trim()).filter(Boolean);
   };
 
-  const filteredAndSortedList = useMemo(() => {
+  const getFilteredCount = (baseList: string[]) => {
     let list = [...baseList];
+    if (activeLabelFilters.length > 0) {
+        list = list.filter(word => {
+            const currentLabels = wordLabels[word] || [];
+            if (labelFilterLogic === 'OR') {
+                return activeLabelFilters.some(id => currentLabels.includes(id));
+            } else {
+                return activeLabelFilters.every(id => currentLabels.includes(id));
+            }
+        });
+    }
+    if (filter !== 'all') {
+        list = list.filter(word => {
+            const item = srsData[word];
+            const mastery = item?.masteryLevel || 0;
+            const revCount = item?.reviewCount || 0;
+            if (filter === 'new') return revCount === 0;
+            if (filter === 'learning') return revCount > 0 && mastery < 5;
+            if (filter === 'mastered') return mastery >= 5;
+            return true;
+        });
+    }
+    return list.length;
+  };
+
+  const filteredLibraryCount = useMemo(() => getFilteredCount(savedWords), [savedWords, activeLabelFilters, wordLabels, labelFilterLogic, filter, srsData]);
+  const filteredFavoritesCount = useMemo(() => getFilteredCount(favoriteWords), [favoriteWords, activeLabelFilters, wordLabels, labelFilterLogic, filter, srsData]);
+
+  const filteredAndSortedList = useMemo(() => {
+    let list = activeTab === 'all' ? [...savedWords] : [...favoriteWords];
     
-    // Label filter
+    // Use the same filtering logic
     if (activeLabelFilters.length > 0) {
         list = list.filter(word => {
             const currentLabels = wordLabels[word] || [];
@@ -272,10 +301,10 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
       <div className="list-tabs-container">
           <div className="list-tabs">
               <button onClick={() => setActiveTab('all')} className={activeTab === 'all' ? 'active' : ''}>
-                  LIBRARY ({savedWords.length})
+                  LIBRARY ({filteredLibraryCount})
               </button>
               <button onClick={() => setActiveTab('favorites')} className={activeTab === 'favorites' ? 'active fav' : ''}>
-                  FAVOURITE ({favoriteWords.length})
+                  FAVOURITE ({filteredFavoritesCount})
               </button>
           </div>
       </div>
@@ -631,9 +660,9 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
 
         .saved-list-view { position: relative; }
 
-        .list-tabs-container { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; padding: 0 4px; }
+        .list-tabs-container { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; padding: 0; }
         .list-tabs { flex: 1; display: flex; gap: 6px; background: var(--accent-secondary); padding: 5px; border-radius: 16px; }
-        .list-tabs button { flex: 1; padding: 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); }
+        .list-tabs button { flex: 1; padding: 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 800; color: var(--text-secondary); }
         .list-tabs button.active { background: var(--card-bg); color: var(--accent-primary); box-shadow: 0 4px 12px rgba(88, 86, 214, 0.1); }
         
         .sort-filter-main-row {
@@ -698,7 +727,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             margin-bottom: 1rem;
             overflow-x: auto;
             scrollbar-width: none;
-            padding: 2px;
+            padding: 2px 0;
         }
         .filter-chips::-webkit-scrollbar { display: none; }
         .filter-chips .chip {
@@ -816,14 +845,14 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             white-space: nowrap;
         }
 
-        .words-scroll-list { display: flex; flex-direction: column; gap: 0.65rem; padding: 0 4px; }
+        .words-scroll-list { display: flex; flex-direction: column; gap: 0.65rem; padding: 0; }
         .modern-word-card { 
             background: var(--card-bg); 
             border-radius: 20px; 
-            padding: 0.85rem 1.15rem; 
+            padding: 0.85rem 0.6rem; 
             display: flex; 
             align-items: flex-start; 
-            gap: 1rem; 
+            gap: 0.65rem; 
             border: 1px solid var(--border-color); 
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             cursor: pointer;
@@ -837,7 +866,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
             background: #fff;
         }
         .modern-word-card.selected { background: var(--accent-secondary); border-color: var(--accent-primary); }
-        .word-title { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; text-transform: none; }
+        .word-title { font-size: 1.1rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; text-transform: none; }
         .card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
         .card-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
         .card-labels-dots-inline {
