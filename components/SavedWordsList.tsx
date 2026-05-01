@@ -55,6 +55,7 @@ const SavedWordsList: React.FC<SavedWordsListProps> = ({
     localStorage.setItem('lexiflow_sortBy', sortBy);
     localStorage.setItem('lexiflow_sortOrder', sortOrder);
   }, [sortBy, sortOrder]);
+
   const [filter, setFilter] = useState<MasteryFilter>('all');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
